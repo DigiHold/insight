@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { insertRows } from '@/lib/clickhouse';
 import { classifySource } from '@/lib/sources';
 import { parseUa } from '@/lib/ua';
-import { clientIp, countryFromHeaders, visitorId } from '@/lib/request';
+import { cityFromHeaders, clientIp, countryFromHeaders, visitorId } from '@/lib/request';
 import { isBot } from '@/lib/bots';
 
 export const runtime = 'nodejs';
@@ -21,6 +21,10 @@ export function OPTIONS() {
 interface Beacon {
   site?: string;
   type?: string;
+  iid?: string;
+  amount?: number;
+  currency?: string;
+  goal?: string;
   url?: string;
   path?: string;
   query?: string;
@@ -61,10 +65,33 @@ export async function POST(req: Request) {
   const uaInfo = parseUa(ua);
 
   const path = str(b.path);
+  const vid = visitorId(ip, ua, str(b.iid) || undefined);
+  const geo = cityFromHeaders(req.headers);
+
+  // Purchase events go to the revenue table with last-touch attribution,
+  // so revenue can be broken down by channel and campaign.
+  if (str(b.type) === 'purchase') {
+    const amount = num(b.amount);
+    if (amount > 0 && amount < 1000000) {
+      try {
+        await insertRows('revenue', [{
+          site_id: (str(b.site) || 'unknown').slice(0, 64),
+          visitor_id: vid,
+          amount: Math.round(amount * 100) / 100,
+          currency: (str(b.currency) || 'usd').slice(0, 8).toLowerCase(),
+          provider: 'insight',
+          source: src.source,
+          campaign: str(b.utm_campaign).slice(0, 128),
+        }]);
+      } catch { /* never break the host site */ }
+    }
+    return new NextResponse(null, { status: 204, headers: CORS });
+  }
+
   const row = {
     site_id: (str(b.site) || 'unknown').slice(0, 64),
-    visitor_id: visitorId(ip, ua),
-    session_id: visitorId(ip, ua),
+    visitor_id: vid,
+    session_id: vid,
     event_type: str(b.type) || 'pageview',
     url: str(b.url).slice(0, 2048),
     pathname: path.slice(0, 1024),
@@ -80,8 +107,8 @@ export async function POST(req: Request) {
     landing_page: path.slice(0, 1024),
     click_target: str(b.click_target).slice(0, 2048),
     country: countryFromHeaders(req.headers),
-    region: '',
-    city: '',
+    region: geo.region.slice(0, 128),
+    city: geo.city.slice(0, 128),
     device: uaInfo.device,
     browser: uaInfo.browser,
     os: uaInfo.os,

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { queryRows } from '@/lib/clickhouse';
 import { validSession } from '@/lib/auth';
 import { getSite } from '@/lib/sites';
+import { getJson } from '@/lib/settings';
 import { stripeRevenue, stripeRevenueRange, stripeSeries, stripeSeriesRange, type Revenue, type RevenueBucket } from '@/lib/stripe';
 import { getGa4Account } from '@/lib/ga4-account';
 import { ga4LiveStats, ga4RangeStats, ga4TodayStats, type Ga4Stats } from '@/lib/ga4';
@@ -59,6 +60,69 @@ async function aiData(filter: string, params: Record<string, unknown> | undefine
   return { ai, aiSeries, aiBots };
 }
 
+interface HeatCell { d: string; h: string; c: string }
+interface CohortRow { cohort: string; offset: string; n: string }
+interface RevRow { key: string; amount: string }
+
+// Extra breakdowns computed from the tracker (ClickHouse), shared by the
+// live and history paths. win = current window condition; beforeExpr =
+// "before the window" condition used for new vs returning.
+async function extraData(site: string, all: boolean, filter: string, params: Record<string, unknown> | undefined, win: string, beforeExpr: string) {
+  const pv = `event_type = 'pageview' AND ${win}${filter}`;
+  const brk = (col: string, extra = '') => queryRows<CountRow>(`SELECT ${col} AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv}${extra} GROUP BY key ORDER BY c DESC LIMIT 50`, params);
+  const funnelSteps = all ? [] : ((await getJson<string[]>(`funnel-${site}`)) ?? []);
+
+  const [landing, exits, outbound, utmMedium, utmTerm, utmContent, languages, cities, regions, returning, totalV, heatmap, retention, revChannel, revCampaign, funnelRows] = await Promise.all([
+    queryRows<CountRow>(`SELECT lp AS key, uniqExact(visitor_id) AS c FROM (SELECT visitor_id, argMin(pathname, ts) AS lp FROM events WHERE ${pv} GROUP BY visitor_id) GROUP BY key ORDER BY c DESC LIMIT 50`, params),
+    queryRows<CountRow>(`SELECT lp AS key, uniqExact(visitor_id) AS c FROM (SELECT visitor_id, argMax(pathname, ts) AS lp FROM events WHERE ${pv} GROUP BY visitor_id) GROUP BY key ORDER BY c DESC LIMIT 50`, params),
+    queryRows<CountRow>(`SELECT click_target AS key, count() AS c FROM events WHERE event_type = 'click' AND click_target != '' AND ${win}${filter} GROUP BY key ORDER BY c DESC LIMIT 50`, params),
+    brk('utm_medium', " AND utm_medium != ''"),
+    brk('utm_term', " AND utm_term != ''"),
+    brk('utm_content', " AND utm_content != ''"),
+    brk("lower(substring(language, 1, 2))", " AND language != ''"),
+    brk('city', " AND city != ''"),
+    brk('region', " AND region != ''"),
+    queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE ${pv} AND visitor_id IN (SELECT visitor_id FROM events WHERE event_type = 'pageview' AND ${beforeExpr}${filter})`, params),
+    queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE ${pv}`, params),
+    queryRows<HeatCell>(`SELECT toDayOfWeek(ts) AS d, toHour(ts) AS h, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 28 DAY${filter} GROUP BY d, h`, params),
+    queryRows<CohortRow>(`SELECT toString(cohort) AS cohort, dateDiff('week', cohort, wk) AS offset, uniqExact(e.visitor_id) AS n FROM (SELECT visitor_id, toStartOfWeek(ts) AS wk FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 63 DAY${filter} GROUP BY visitor_id, wk) AS e INNER JOIN (SELECT visitor_id, min(toStartOfWeek(ts)) AS cohort FROM events WHERE event_type = 'pageview'${filter} GROUP BY visitor_id HAVING cohort >= toStartOfWeek(now() - INTERVAL 63 DAY)) AS f ON e.visitor_id = f.visitor_id WHERE wk >= cohort GROUP BY cohort, offset ORDER BY cohort, offset`, params),
+    queryRows<RevRow>(`SELECT source AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} GROUP BY key ORDER BY amount DESC LIMIT 30`, params),
+    queryRows<RevRow>(`SELECT campaign AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} AND campaign != '' GROUP BY key ORDER BY amount DESC LIMIT 30`, params),
+    funnelSteps.length >= 2
+      ? queryRows<{ level: string; c: string }>(
+          `SELECT level, count() AS c FROM (SELECT visitor_id, windowFunnel(604800)(ts, ${funnelSteps.map((_, i) => `pathname = {f${i}:String}`).join(', ')}) AS level FROM events WHERE ${pv} GROUP BY visitor_id) WHERE level > 0 GROUP BY level`,
+          { ...(params ?? {}), ...Object.fromEntries(funnelSteps.map((p, i) => [`f${i}`, p])) },
+        )
+      : Promise.resolve([] as { level: string; c: string }[]),
+  ]);
+
+  const tot = n(totalV[0]?.n);
+  const ret = Math.min(tot, n(returning[0]?.n));
+  // Funnel: visitors reaching step i = sum of levels >= i+1.
+  const funnelCounts = funnelSteps.map((_, i) => funnelRows.reduce((a, r) => a + (Number(r.level) >= i + 1 ? n(r.c) : 0), 0));
+
+  return {
+    landing: landing.map((r) => ({ name: r.key || '/', count: n(r.c) })),
+    exits: exits.map((r) => ({ name: r.key || '/', count: n(r.c) })),
+    outbound: outbound.map((r) => ({ name: r.key, count: n(r.c) })),
+    utmMedium: utmMedium.map((r) => ({ name: r.key, count: n(r.c) })),
+    utmTerm: utmTerm.map((r) => ({ name: r.key, count: n(r.c) })),
+    utmContent: utmContent.map((r) => ({ name: r.key, count: n(r.c) })),
+    languages: languages.map((r) => ({ name: r.key, count: n(r.c) })),
+    cities: cities.map((r) => ({ name: r.key, count: n(r.c) })),
+    regions: regions.map((r) => ({ name: r.key, count: n(r.c) })),
+    visitorSplit: { newV: Math.max(0, tot - ret), returning: ret },
+    heatmap: heatmap.map((r) => ({ d: Number(r.d), h: Number(r.h), c: n(r.c) })),
+    retention: retention.map((r) => ({ cohort: r.cohort, offset: Number(r.offset), n: n(r.n) })),
+    revAttrib: {
+      source: revChannel.map((r) => ({ name: r.key, amount: Math.round(Number(r.amount) * 100) / 100 })),
+      campaign: revCampaign.map((r) => ({ name: r.key, amount: Math.round(Number(r.amount) * 100) / 100 })),
+    },
+    funnel: funnelSteps.length >= 2 ? { steps: funnelSteps, counts: funnelCounts } : null,
+  };
+}
+type Extras = Awaited<ReturnType<typeof extraData>>;
+
 // GA4 'date' (YYYYMMDD) -> ISO YYYY-MM-DD ; GA4 'hour' (00..23) -> HH:00.
 // The frontend then formats it as "16 Jun" / "8 AM" and computes the "X days ago".
 const slabel = (d: string): string => (d.length >= 8 ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : `${d.padStart(2, '0')}:00`);
@@ -70,6 +134,13 @@ function attachRev<S extends { t: string; count: number }>(series: S[], rev: Rec
     const b = rev?.[p.t];
     return { ...p, revenue: b ? Math.round(b.n * 100) / 100 : 0, refunds: b ? Math.round(b.r * 100) / 100 : 0 };
   });
+}
+
+// When GA4 is connected, its landing/cities/regions/languages replace the
+// tracker versions (same numbers as GA4, instantly available).
+function ga4Extras(g: Ga4Stats) {
+  const map = (a: { key: string; visitors: number }[]) => a.filter((r) => r.key && r.key !== '(not set)').map((r) => ({ name: r.key, count: r.visitors }));
+  return { landing: map(g.landing ?? []), cities: map(g.cities ?? []), regions: map(g.regions ?? []), languages: map(g.languages ?? []) };
 }
 
 // Transforms a Ga4Stats into the shape expected by the dashboard (Today, cards, series).
@@ -145,6 +216,7 @@ async function liveStats(site: string, all: boolean) {
     queryRows<OneRow>(`SELECT countIf(pv = 1) AS bounced, count() AS sessions FROM (SELECT visitor_id, countIf(event_type = 'pageview') AS pv FROM events WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < now() - INTERVAL 1 DAY${filter} GROUP BY visitor_id)`, params),
   ]);
 
+  const extras = await extraData(site, all, filter, params, 'ts >= now() - INTERVAL 1 DAY', 'ts < now() - INTERVAL 1 DAY');
   const sessions = n(bounce[0]?.sessions);
   const bounceRate = sessions > 0 ? Math.round((n(bounce[0]?.bounced) / sessions) * 100) : 0;
   const prevSessions = n(prevBounce[0]?.sessions);
@@ -169,7 +241,7 @@ async function liveStats(site: string, all: boolean) {
     const g = await ga4TodayStats(acc.json, s.ga4.propertyId);
     if (g) {
       const out = fromGa4(g, { revenue, online: n(online[0]?.n), campaigns: campaignsOut, ai: aiOut, aiSeries, aiBots });
-      return { ...out, series: attachRev(out.series, revMap) };
+      return { ...out, ...extras, ...ga4Extras(g), series: attachRev(out.series, revMap) };
     }
   }
 
@@ -178,6 +250,7 @@ async function liveStats(site: string, all: boolean) {
     online: n(online[0]?.n),
     today: { visitors: n(today[0]?.visitors), pageviews: n(today[0]?.pageviews), avgDuration: Math.round(Number(avg[0]?.d ?? 0)), bounceRate },
     prev,
+    ...extras,
     channels: channels.map((r) => ({ name: r.key, type: r.key, count: n(r.c) })),
     referrers: referrers.map((r) => ({ name: r.key, count: n(r.c) })),
     campaigns: campaignsOut,
@@ -224,6 +297,9 @@ async function historyStats(site: string, all: boolean, period: string, from?: s
   const revMap = s?.stripeKey ? (custom ? await stripeSeriesRange(s.stripeKey, fromSec, toSec) : await stripeSeries(s.stripeKey, days)) : null;
   const base: Base = { revenue, online, campaigns: [], ai, aiSeries, aiBots };
 
+  const beforeExpr = custom ? 'ts < toDateTime({from:String})' : `ts < now() - INTERVAL ${days} DAY`;
+  const extras = await extraData(site, all, filter, params, win, beforeExpr);
+
   const acc = s?.ga4 ? await getGa4Account() : null;
   if (s?.ga4 && acc) {
     const g = custom
@@ -231,10 +307,10 @@ async function historyStats(site: string, all: boolean, period: string, from?: s
       : await ga4LiveStats(acc.json, s.ga4.propertyId, days);
     if (g) {
       const out = fromGa4(g, base);
-      return { ...out, series: attachRev(out.series, revMap) };
+      return { ...out, ...extras, ...ga4Extras(g), series: attachRev(out.series, revMap) };
     }
   }
-  return eventsHistory(filter, params, days, base, revMap, win, pwin);
+  return { ...(await eventsHistory(filter, params, days, base, revMap, win, pwin)), ...extras };
 }
 
 // Aggregates history from the Insight tracker (ClickHouse), series by day.

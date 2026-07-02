@@ -76,6 +76,10 @@ export interface Ga4Stats {
   browsers: { key: string; visitors: number }[];
   os: { key: string; visitors: number }[];
   pages: { key: string; pageviews: number }[];
+  landing: { key: string; visitors: number }[];
+  cities: { key: string; visitors: number }[];
+  regions: { key: string; visitors: number }[];
+  languages: { key: string; visitors: number }[];
 }
 
 const statsCache = new Map<string, { ts: number; data: Ga4Stats | null }>();
@@ -93,7 +97,7 @@ async function runLive(json: string, propertyId: string, startDate: string, endD
   const bd = (name: string, metric: string, limit: number) =>
     runReport(token, propertyId, { dateRanges: range, dimensions: [{ name }], metrics: [{ name: metric }], orderBys: [{ metric: { metricName: metric }, desc: true }], limit });
 
-  const [total, series, sources, countries, devices, browsers, os, pages] = await Promise.all([
+  const [total, series, sources, countries, devices, browsers, os, pages, landing, cities, regions, languages] = await Promise.all([
     runReport(token, propertyId, { dateRanges: totalRanges, metrics: [{ name: USERS }, { name: 'screenPageViews' }, { name: 'bounceRate' }, { name: 'userEngagementDuration' }, { name: 'sessions' }] }),
     runReport(token, propertyId, { dateRanges: range, dimensions: [{ name: seriesDim }], metrics: [{ name: USERS }], orderBys: [{ dimension: { dimensionName: seriesDim } }], limit: 400 }),
     bd('sessionSource', USERS, 50),
@@ -102,6 +106,10 @@ async function runLive(json: string, propertyId: string, startDate: string, endD
     bd('browser', USERS, 20),
     bd('operatingSystem', USERS, 20),
     bd('pageTitle', 'screenPageViews', 50),
+    bd('landingPage', USERS, 50),
+    bd('city', USERS, 50),
+    bd('region', USERS, 50),
+    bd('language', USERS, 50),
   ]);
 
   // With two ranges, GA4 adds a dateRange dimension: 'date_range_0' (current), 'date_range_1' (previous).
@@ -124,6 +132,10 @@ async function runLive(json: string, propertyId: string, startDate: string, endD
     browsers: browsers.map((r) => ({ key: r.dimensionValues[0].value, visitors: mv(r) })),
     os: os.map((r) => ({ key: r.dimensionValues[0].value, visitors: mv(r) })),
     pages: pages.map((r) => ({ key: r.dimensionValues[0].value, pageviews: mv(r) })),
+    landing: landing.map((r) => ({ key: r.dimensionValues[0].value, visitors: mv(r) })),
+    cities: cities.map((r) => ({ key: r.dimensionValues[0].value, visitors: mv(r) })),
+    regions: regions.map((r) => ({ key: r.dimensionValues[0].value, visitors: mv(r) })),
+    languages: languages.map((r) => ({ key: r.dimensionValues[0].value, visitors: mv(r) })),
   };
 }
 

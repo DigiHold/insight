@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
+import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
 import dynamic from 'next/dynamic';
 
 const GlobeModal = dynamic(() => import('./globe'), { ssr: false });
@@ -27,6 +27,20 @@ interface Stats {
   ai: AiBot[];
   aiSeries?: Record<string, number | string>[];
   aiBots?: string[];
+  landing?: Row[];
+  exits?: Row[];
+  outbound?: Row[];
+  utmMedium?: Row[];
+  utmTerm?: Row[];
+  utmContent?: Row[];
+  languages?: Row[];
+  cities?: Row[];
+  regions?: Row[];
+  visitorSplit?: { newV: number; returning: number };
+  heatmap?: { d: number; h: number; c: number }[];
+  retention?: { cohort: string; offset: number; n: number }[];
+  revAttrib?: { source: { name: string; amount: number }[]; campaign: { name: string; amount: number }[] };
+  funnel?: { steps: string[]; counts: number[] } | null;
 }
 interface AiBot { name: string; vendor: string; category: string; count: number; last: string; pages: { name: string; count: number }[] }
 
@@ -64,6 +78,16 @@ const cap = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) :
 let regionNames: Intl.DisplayNames | null = null;
 try { regionNames = new Intl.DisplayNames(['en'], { type: 'region' }); } catch { regionNames = null; }
 const countryName = (c: string): string => { try { return regionNames?.of(c.toUpperCase()) ?? c; } catch { return c; } };
+let langNames: Intl.DisplayNames | null = null;
+try { langNames = new Intl.DisplayNames(['en'], { type: 'language' }); } catch { langNames = null; }
+// Tracker sends 2-letter codes; GA4 sends full names already.
+const langLabel = (v: string): string => { if (v.length > 3) return v; try { return langNames?.of(v) ?? v; } catch { return v; } };
+const timeAgo = (sec: number): string => {
+  const d = Math.max(0, Math.floor(Date.now() / 1000) - sec);
+  if (d < 60) return `${d}s ago`;
+  if (d < 3600) return `${Math.floor(d / 60)}m ago`;
+  return `${Math.floor(d / 3600)}h ago`;
+};
 function osLabel(v: string): string {
   const s = v.toLowerCase();
   if (s === 'macos' || s === 'macintosh' || s === 'mac os') return 'Mac OS';
@@ -147,7 +171,7 @@ const GscLogo = () => (
     <path d="M11.081 30.527l-4.72 4.721a.933.933 0 0 1-1.317 0l-.292-.292a.933.933 0 0 1 0-1.316l4.72-4.721a.933.933 0 0 1 1.318 0l.291.291a.93.93 0 0 1 0 1.317z" fill="#FBBC04" /><path d="M23.75 32.5h6.042a6.04 6.04 0 0 0 6.041-6.042v-16.25a6.04 6.04 0 0 0-6.041-6.041 6.04 6.04 0 0 0-6.042 6.041V32.5z" fill="#4285F4" /><path d="M13.75 32.5a6.04 6.04 0 0 0 6.042-6.042 6.04 6.04 0 0 0-6.042-6.041 6.04 6.04 0 0 0-6.042 6.041A6.04 6.04 0 0 0 13.75 32.5z" fill="#FBBC04" /><path d="M27.97 32.5h-5.887a6.04 6.04 0 0 1-6.041-6.042v-7.916a6.04 6.04 0 0 1 6.041-6.042 6.04 6.04 0 0 1 6.042 6.042v13.804a.154.154 0 0 1-.154.154z" fill="#34A853" /><path d="M28.125 32.346V18.542a6.042 6.042 0 0 0-4.375-5.807V32.5h4.22a.154.154 0 0 0 .155-.154z" fill="#1967D2" /><path d="M19.792 26.575a6.04 6.04 0 0 0-3.75-5.59v5.59c0 1.72.72 3.273 1.875 4.373a6.024 6.024 0 0 0 1.875-4.373z" fill="#EA4335" /><path d="M136.949 24.423c0 1.404-.515 2.533-1.543 3.385-1.044.837-2.311 1.255-3.802 1.255-1.327 0-2.497-.388-3.511-1.163-1.014-.775-1.714-1.834-2.102-3.176l1.968-.805c.134.478.32.91.559 1.297.238.388.518.72.839.995.32.276.674.492 1.062.649.388.156.798.235 1.23.235.939 0 1.707-.243 2.304-.727.596-.485.894-1.13.894-1.934 0-.671-.246-1.245-.738-1.722-.462-.462-1.327-.91-2.594-1.342-1.282-.462-2.08-.775-2.393-.94-1.699-.864-2.549-2.138-2.549-3.823 0-1.178.47-2.184 1.409-3.02.954-.834 2.124-1.252 3.511-1.252 1.222 0 2.281.313 3.175.94.895.611 1.491 1.379 1.789 2.303l-1.923.805a2.844 2.844 0 0 0-1.062-1.487c-.53-.395-1.174-.592-1.935-.592-.805 0-1.483.223-2.035.668-.551.416-.827.957-.827 1.625 0 .55.216 1.025.649 1.425.476.401 1.512.876 3.108 1.425 1.625.553 2.784 1.23 3.477 2.029.694.8 1.041 1.781 1.041 2.947h-.001zM143.635 29.062c-1.61 0-2.937-.551-3.981-1.655-1.043-1.103-1.565-2.496-1.565-4.181s.507-3.06 1.521-4.17c1.013-1.111 2.31-1.666 3.891-1.666 1.58 0 2.918.525 3.88 1.576.962 1.05 1.442 2.523 1.442 4.416l-.022.224h-8.61c.03 1.073.388 1.938 1.074 2.594a3.43 3.43 0 0 0 2.459.984c1.312 0 2.341-.656 3.086-1.968l1.834.894a5.464 5.464 0 0 1-2.046 2.17c-.872.521-1.859.782-2.963.782zm-3.287-7.156h6.284a2.731 2.731 0 0 0-.928-1.89c-.559-.499-1.309-.748-2.248-.748-.775 0-1.443.238-2.002.715-.559.477-.927 1.118-1.106 1.923zM154.398 17.389c1.52 0 2.72.406 3.6 1.219.879.813 1.319 1.927 1.319 3.343v6.753h-1.967v-1.52h-.09c-.85 1.252-1.983 1.878-3.399 1.878-1.208 0-2.218-.358-3.03-1.073-.813-.716-1.219-1.61-1.219-2.684 0-1.132.428-2.035 1.285-2.706.857-.67 2.002-1.006 3.433-1.006 1.222 0 2.229.224 3.019.671v-.47c0-.715-.283-1.323-.85-1.822-.567-.5-1.23-.75-1.99-.75-1.148 0-2.057.485-2.728 1.454l-1.812-1.14c.999-1.431 2.475-2.147 4.428-2.147h.001zm-2.661 7.961c0 .537.227.984.682 1.342.454.358.987.537 1.599.537.864 0 1.636-.32 2.314-.962.678-.64 1.018-1.394 1.018-2.259-.642-.506-1.536-.76-2.684-.76-.835 0-1.532.201-2.091.604-.559.402-.839.902-.839 1.498h.001zM163.331 28.704h-2.057V17.747h1.968v1.789h.089c.209-.582.638-1.077 1.286-1.487.649-.41 1.286-.615 1.912-.615.626 0 1.103.09 1.521.268l-.626 1.99c-.254-.104-.657-.156-1.208-.156-.775 0-1.45.313-2.024.94a3.141 3.141 0 0 0-.861 2.19v6.038zM173.569 29.062c-1.625 0-2.975-.551-4.048-1.655-1.059-1.132-1.588-2.527-1.588-4.181 0-1.655.529-3.079 1.588-4.182 1.073-1.103 2.423-1.655 4.048-1.655 1.118 0 2.094.28 2.929.839.835.559 1.461 1.33 1.879 2.314l-1.879.783c-.581-1.372-1.603-2.058-3.063-2.058-.94 0-1.753.38-2.438 1.141-.671.76-1.006 1.7-1.006 2.818s.335 2.057 1.006 2.817c.685.76 1.498 1.14 2.438 1.14 1.505 0 2.563-.685 3.175-2.057l1.834.783c-.403.984-1.033 1.755-1.89 2.314-.857.56-1.852.84-2.985.84zM179.7 12.693h2.057v5.054l-.089 1.52h.089c.313-.536.795-.983 1.443-1.341a4.136 4.136 0 0 1 2.024-.537c1.341 0 2.374.384 3.097 1.152.723.768 1.084 1.86 1.084 3.276v6.887h-2.057V22.22c0-1.968-.872-2.952-2.616-2.952-.836 0-1.54.347-2.114 1.04-.574.693-.861 1.503-.861 2.427v5.97H179.7V12.693zM204.634 29.062c-2.371 0-4.354-.797-5.949-2.393-1.58-1.595-2.37-3.585-2.37-5.97 0-2.386.79-4.368 2.37-5.949 1.58-1.61 3.563-2.415 5.949-2.415 2.385 0 4.375.872 5.881 2.616l-1.476 1.432c-1.148-1.387-2.616-2.08-4.405-2.08-1.789 0-3.258.596-4.45 1.789-1.178 1.178-1.767 2.714-1.767 4.607 0 1.893.589 3.429 1.767 4.606 1.192 1.193 2.675 1.79 4.45 1.79 1.863 0 3.481-.783 4.852-2.349l1.499 1.454a7.774 7.774 0 0 1-2.796 2.113 8.52 8.52 0 0 1-3.555.75zM211.778 23.226c0-1.685.529-3.079 1.588-4.182 1.073-1.103 2.422-1.655 4.048-1.655 1.625 0 2.966.552 4.025 1.655 1.073 1.103 1.61 2.497 1.61 4.182 0 1.684-.537 3.093-1.61 4.181-1.059 1.104-2.401 1.655-4.025 1.655-1.625 0-2.975-.551-4.048-1.655-1.059-1.103-1.588-2.496-1.588-4.181zm2.058 0c0 1.178.342 2.132 1.028 2.862.686.73 1.536 1.096 2.55 1.096 1.014 0 1.863-.365 2.549-1.096.685-.73 1.029-1.684 1.029-2.862 0-1.178-.344-2.11-1.029-2.84-.701-.746-1.551-1.119-2.549-1.119-.999 0-1.849.373-2.55 1.119-.686.73-1.028 1.677-1.028 2.84zM224.509 17.747h1.968v1.52h.09c.313-.536.794-.983 1.442-1.341a4.136 4.136 0 0 1 2.024-.537c1.342 0 2.374.384 3.097 1.152.723.768 1.085 1.86 1.085 3.276v6.887h-2.058v-6.753c-.044-1.789-.947-2.684-2.706-2.684-.82 0-1.506.332-2.057.995-.552.664-.827 1.458-.827 2.382v6.06h-2.058V17.746zM244.519 25.663c0 .954-.417 1.76-1.252 2.415-.835.656-1.886.984-3.153.984-1.104 0-2.073-.287-2.907-.86a4.734 4.734 0 0 1-1.789-2.27l1.833-.783c.269.656.66 1.166 1.174 1.532a2.851 2.851 0 0 0 1.689.547c.656 0 1.204-.14 1.643-.424.44-.283.66-.619.66-1.007 0-.7-.537-1.215-1.61-1.543l-1.878-.47c-2.133-.536-3.198-1.565-3.198-3.085 0-.999.406-1.8 1.219-2.404.812-.604 1.852-.905 3.119-.905.969 0 1.845.23 2.628.693.783.462 1.331 1.08 1.643 1.856l-1.833.76a2.309 2.309 0 0 0-1.018-1.084 3.191 3.191 0 0 0-1.576-.392c-.537 0-1.017.134-1.443.403-.425.268-.637.596-.637.984 0 .626.589 1.073 1.767 1.341l1.655.425c2.176.537 3.265 1.633 3.265 3.288h-.001zM245.292 23.226c0-1.685.529-3.079 1.588-4.182 1.073-1.103 2.422-1.655 4.048-1.655 1.625 0 2.966.552 4.025 1.655 1.073 1.103 1.61 2.497 1.61 4.182 0 1.684-.537 3.093-1.61 4.181-1.059 1.104-2.401 1.655-4.025 1.655-1.625 0-2.975-.551-4.048-1.655-1.059-1.103-1.588-2.496-1.588-4.181zm2.058 0c0 1.178.342 2.132 1.028 2.862.686.73 1.536 1.096 2.55 1.096 1.014 0 1.863-.365 2.549-1.096.685-.73 1.029-1.684 1.029-2.862 0-1.178-.344-2.11-1.029-2.84-.701-.746-1.551-1.119-2.549-1.119-.999 0-1.849.373-2.55 1.119-.686.73-1.028 1.677-1.028 2.84zM260.108 12.693v16.011h-2.058V12.693h2.058zM267.14 29.062c-1.61 0-2.937-.551-3.98-1.655-1.044-1.103-1.566-2.496-1.566-4.181s.507-3.06 1.521-4.17c1.014-1.111 2.311-1.666 3.891-1.666 1.581 0 2.919.525 3.88 1.576.962 1.05 1.442 2.523 1.442 4.416l-.022.224h-8.609c.029 1.073.387 1.938 1.073 2.594a3.43 3.43 0 0 0 2.46.984c1.311 0 2.34-.656 3.086-1.968l1.834.894a5.464 5.464 0 0 1-2.046 2.17c-.873.521-1.86.782-2.963.782h-.001zm-3.287-7.156h6.284a2.731 2.731 0 0 0-.928-1.89c-.559-.499-1.308-.748-2.248-.748-.775 0-1.442.238-2.001.715-.559.477-.928 1.118-1.107 1.923zM57.577 21.682v-2.476h8.287c.084.437.134.956.134 1.518 0 1.857-.508 4.156-2.144 5.792-1.59 1.658-3.624 2.542-6.32 2.542-4.995 0-9.194-4.067-9.194-9.064 0-4.995 4.2-9.063 9.194-9.063 2.762 0 4.73 1.083 6.21 2.498l-1.746 1.747c-1.061-.995-2.497-1.769-4.464-1.769-3.647 0-6.498 2.94-6.498 6.588s2.851 6.588 6.498 6.588c2.365 0 3.713-.95 4.575-1.813.702-.702 1.164-1.71 1.344-3.087h-5.876zM78.626 23.223c0 3.36-2.63 5.836-5.856 5.836-3.227 0-5.857-2.476-5.857-5.837 0-3.36 2.63-5.836 5.857-5.836 3.226 0 5.856 2.454 5.856 5.837zm-2.563 0c0-2.1-1.525-3.537-3.293-3.537-1.768 0-3.293 1.436-3.293 3.537 0 2.1 1.525 3.536 3.293 3.536 1.769 0 3.293-1.459 3.293-3.537zM91.403 23.223c0 3.36-2.63 5.836-5.857 5.836-3.227 0-5.857-2.476-5.857-5.837 0-3.36 2.63-5.836 5.857-5.836 3.227 0 5.857 2.454 5.857 5.837zm-2.564 0c0-2.1-1.524-3.537-3.292-3.537-1.768 0-3.294 1.436-3.294 3.537 0 2.1 1.525 3.536 3.294 3.536 1.768 0 3.292-1.459 3.292-3.537zM103.649 17.74v10.478c0 4.31-2.541 6.08-5.547 6.08-2.83 0-4.53-1.902-5.172-3.449l2.232-.929c.398.95 1.37 2.078 2.94 2.078 1.923 0 3.116-1.194 3.116-3.426v-.84h-.088c-.575.707-1.68 1.326-3.072 1.326-2.918 0-5.592-2.542-5.592-5.814 0-3.272 2.674-5.858 5.592-5.858 1.392 0 2.497.619 3.072 1.304h.088v-.95h2.431zm-2.254 5.504c0-2.056-1.37-3.559-3.117-3.559-1.746 0-3.248 1.503-3.248 3.56 0 2.055 1.48 3.514 3.248 3.514 1.769 0 3.117-1.48 3.117-3.515zM107.991 11.608v17.097h-2.563V11.608h2.563zM117.891 25.145l1.989 1.326c-.641.951-2.188 2.587-4.862 2.587-3.315 0-5.791-2.565-5.791-5.836 0-3.471 2.498-5.837 5.503-5.837 3.006 0 4.509 2.41 4.995 3.714l.265.663-7.802 3.228c.597 1.172 1.526 1.769 2.829 1.769 1.304 0 2.211-.642 2.874-1.614zm-6.122-2.1l5.215-2.166c-.287-.73-1.149-1.238-2.165-1.238-1.304 0-3.117 1.15-3.05 3.405z" className="fill-zinc-900 dark:fill-zinc-50" />
   </svg>
 );
-interface Tab { label: string; icon?: ReactNode; items: Item[]; donut?: boolean; detail?: DetailTable; emptyNote?: string }
+interface Tab { label: string; icon?: ReactNode; items: Item[]; donut?: boolean; detail?: DetailTable; emptyNote?: string; metric?: string }
 const plainItems = (rows: Row[], color: string, transform?: (s: string) => string): Item[] =>
   rows.map((r) => ({ key: r.name || '—', left: <span className="truncate">{(transform ?? ((s) => s || '/'))(r.name)}</span>, value: r.count, color }));
 
@@ -180,6 +204,14 @@ export default function Dashboard() {
   });
   const [rangeOpen, setRangeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [notes, setNotes] = useState<{ date: string; text: string }[]>([]);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const loadNotes = useCallback(() => {
+    if (!siteId) { setNotes([]); return; }
+    fetch(`/api/notes?site=${encodeURIComponent(siteId)}`, { cache: 'no-store' })
+      .then((r) => r.json()).then((j) => setNotes(j.notes ?? [])).catch(() => setNotes([]));
+  }, [siteId]);
+  useEffect(() => { loadNotes(); }, [loadNotes]);
 
   useEffect(() => { if (siteId) localStorage.setItem('insight_site', siteId); }, [siteId]);
   useEffect(() => { localStorage.setItem('insight_period', period); }, [period]);
@@ -413,9 +445,13 @@ export default function Dashboard() {
                 <div className="mt-6 grid flex-1 grid-cols-2 content-start gap-x-5 gap-y-4 border-t border-[var(--card-border)] pt-5">
                   {chips.map((m) => <StatChip key={m.label} {...m} />)}
                 </div>
+                {data?.visitorSplit && (data.visitorSplit.newV + data.visitorSplit.returning) > 0 && (
+                  <SplitBar newV={data.visitorSplit.newV} returning={data.visitorSplit.returning} />
+                )}
               </div>
 
               <div className="card p-4 sm:p-5">
+                <button onClick={() => setNoteOpen(true)} title="Add a note on the chart" className="absolute right-3 top-3 z-10 rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100">+ Note</button>
                 <div className="h-72 lg:h-full lg:min-h-[22rem]">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -445,6 +481,9 @@ export default function Dashboard() {
                       {hasRevenue && (
                         <Bar yAxisId="r" dataKey="rf" stackId="rev" radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false} fill="#ffa950" fillOpacity={0.18} stroke="#ffa950" strokeWidth={1} strokeDasharray="3 3" strokeOpacity={0.7} />
                       )}
+                      {period !== 'today' && notes.filter((nt) => chartData.some((c) => c.h === nt.date)).map((nt) => (
+                        <ReferenceLine key={`${nt.date}-${nt.text}`} yAxisId="v" x={nt.date} stroke="#a855f7" strokeDasharray="4 4" label={{ value: nt.text.length > 14 ? `${nt.text.slice(0, 14)}…` : nt.text, position: 'insideTopLeft', fill: '#a855f7', fontSize: 10 }} />
+                      ))}
                       <Area yAxisId="v" type="monotone" dataKey="v" stroke="#3b82f6" strokeWidth={2.5} fill="url(#fillv)" isAnimationActive={false} fillOpacity={chartHover ? 0.5 : 1} activeDot={{ r: 5, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
@@ -461,11 +500,19 @@ export default function Dashboard() {
                   { label: 'Channel', items: channelItems, donut: true },
                   { label: 'Referrer', items: referrerItems },
                   { label: 'Campaign', items: plainItems(data?.campaigns ?? [], ACCENT) },
+                  { label: 'Medium', items: plainItems(data?.utmMedium ?? [], ACCENT), emptyNote: 'No utm_medium tags in this period.' },
+                  { label: 'Term', items: plainItems(data?.utmTerm ?? [], ACCENT), emptyNote: 'No utm_term tags in this period.' },
+                  { label: 'Content', items: plainItems(data?.utmContent ?? [], ACCENT), emptyNote: 'No utm_content tags in this period.' },
                   { label: 'Keyword', items: keywordItems, detail: keywordDetail, emptyNote: keywordNote },
                 ]} />
               </div>
               <div className="fade-up min-w-0" style={{ animationDelay: '220ms' }}>
-                <TabbedCard title="Top pages" icon={<FileIcon />} metric="Views" tabs={[{ label: 'Top pages', items: plainItems(data?.pages ?? [], ACCENT) }]} />
+                <TabbedCard title="Pages" icon={<FileIcon />} metric="Views" tabs={[
+                  { label: 'Top pages', items: plainItems(data?.pages ?? [], ACCENT) },
+                  { label: 'Landing', metric: 'Visitors', items: plainItems(data?.landing ?? [], '#10b981'), emptyNote: 'First page of each visit shows here.' },
+                  { label: 'Exit', metric: 'Visitors', items: plainItems(data?.exits ?? [], '#f43f5e'), emptyNote: 'Last page of each visit shows here.' },
+                  { label: 'Outbound', metric: 'Clicks', items: plainItems(data?.outbound ?? [], '#3b82f6', (u) => u.replace(/^https?:\/\//, '')), emptyNote: 'Clicks to external links show here.' },
+                ]} />
               </div>
               <div className="fade-up min-w-0" style={{ animationDelay: '280ms' }}>
                 <TabbedCard title="Technology" icon={<ChipIcon />} tabs={[
@@ -475,9 +522,19 @@ export default function Dashboard() {
                 ]} />
               </div>
               <div className="fade-up min-w-0" style={{ animationDelay: '340ms' }}>
-                <TabbedCard title="Countries" icon={<GlobeSmall />} tabs={[{ label: 'Countries', items: countryItems }]} />
+                <TabbedCard title="Locations" icon={<GlobeSmall />} tabs={[
+                  { label: 'Countries', items: countryItems },
+                  { label: 'Regions', items: plainItems(data?.regions ?? [], '#10b981'), emptyNote: 'Needs GA4, or the Cloudflare "visitor location headers" transform.' },
+                  { label: 'Cities', items: plainItems(data?.cities ?? [], '#10b981'), emptyNote: 'Needs GA4, or the Cloudflare "visitor location headers" transform.' },
+                  { label: 'Languages', items: plainItems(data?.languages ?? [], '#a855f7', langLabel) },
+                ]} />
               </div>
-              <div id="ai-panel" className="fade-up scroll-mt-6 md:col-span-2" style={{ animationDelay: '400ms' }}><AiCard data={data} period={period} /></div>
+              <div className="fade-up min-w-0" style={{ animationDelay: '380ms' }}><FeedCard siteId={siteId} /></div>
+              <div className="fade-up min-w-0" style={{ animationDelay: '400ms' }}><HeatmapCard cells={data?.heatmap ?? []} /></div>
+              <div className="fade-up min-w-0" style={{ animationDelay: '420ms' }}><FunnelCard siteId={siteId} funnel={data?.funnel ?? null} onSaved={() => loadStats(siteId)} /></div>
+              <div className="fade-up min-w-0" style={{ animationDelay: '440ms' }}><RetentionCard rows={data?.retention ?? []} /></div>
+              <div className="fade-up md:col-span-2" style={{ animationDelay: '460ms' }}><RevenueAttribCard data={data?.revAttrib} currency={currency} siteId={siteId} /></div>
+              <div id="ai-panel" className="fade-up scroll-mt-6 md:col-span-2" style={{ animationDelay: '480ms' }}><AiCard data={data} period={period} /></div>
             </section>
           </div>
         )}
@@ -505,6 +562,7 @@ export default function Dashboard() {
           </div>
         </Overlay>
       )}
+      {noteOpen && <NoteModal siteId={siteId} notes={notes} onClose={() => setNoteOpen(false)} onChanged={loadNotes} />}
       {rangeOpen && (
         <RangeModal
           initial={range}
@@ -615,7 +673,7 @@ function TabbedCard({ title, icon, tabs, emptyNote, metric = 'Visitors' }: { tit
           {icon && <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#ffa950]/15 text-[#b06a1f] dark:bg-[#ffa950]/10 dark:text-[#ffa950]">{icon}</span>}
           <div className="min-w-0">
             <h3 className="head truncate text-sm font-bold text-zinc-900 dark:text-zinc-50">{title}</h3>
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{metric.toLowerCase()}{tabs.length > 1 ? ` · by ${tab.label.toLowerCase()}` : ''}</p>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{(tab.metric ?? metric).toLowerCase()}{tabs.length > 1 ? ` · by ${tab.label.toLowerCase()}` : ''}</p>
           </div>
         </div>
         {hasData && (
@@ -638,7 +696,7 @@ function TabbedCard({ title, icon, tabs, emptyNote, metric = 'Visitors' }: { tit
               </button>
             ))}
           </div>
-          <span className="shrink-0 pb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{metric}</span>
+          <span className="shrink-0 pb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{tab.metric ?? metric}</span>
         </div>
       )}
 
@@ -669,6 +727,255 @@ function TrackRow({ left, value, max, color }: { left: ReactNode; value: number;
       </div>
       <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
         <span className="block h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 40%, transparent))` }} />
+      </div>
+    </div>
+  );
+}
+
+// New vs returning visitors: one clear two-color split bar.
+function SplitBar({ newV, returning }: { newV: number; returning: number }) {
+  const total = newV + returning;
+  const pctNew = total > 0 ? Math.round((newV / total) * 100) : 0;
+  return (
+    <div className="mt-5 border-t border-[var(--card-border)] pt-4">
+      <div className="flex h-2.5 w-full gap-[3px] overflow-hidden rounded-full">
+        <span className="h-full rounded-full bg-[#3b82f6]" style={{ width: `${Math.max(2, pctNew)}%` }} />
+        <span className="h-full rounded-full bg-[#10b981]" style={{ width: `${Math.max(2, 100 - pctNew)}%` }} />
+      </div>
+      <div className="mt-2.5 flex items-center justify-between text-xs">
+        <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><span className="size-2 rounded-full bg-[#3b82f6]" />New <span className="font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{fmt(newV)}</span></span>
+        <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><span className="size-2 rounded-full bg-[#10b981]" />Returning <span className="font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{fmt(returning)}</span></span>
+      </div>
+    </div>
+  );
+}
+
+// Live feed: the latest pageviews, refreshed every 5 seconds.
+function FeedCard({ siteId }: { siteId: string }) {
+  const [feed, setFeed] = useState<{ ts: number; path: string; country: string; source: string; type: string; device: string }[]>([]);
+  useEffect(() => {
+    if (!siteId) return;
+    let active = true;
+    const load = () => fetch(`/api/feed?site=${encodeURIComponent(siteId)}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => { if (active) setFeed(j.feed ?? []); })
+      .catch(() => { /* keep the last list */ });
+    load();
+    const t = setInterval(load, 5000);
+    return () => { active = false; clearInterval(t); };
+  }, [siteId]);
+  return (
+    <div className="card flex h-full flex-col p-5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#ffa950]/15 text-[#b06a1f] dark:bg-[#ffa950]/10 dark:text-[#ffa950]"><PulseIcon /></span>
+        <div className="min-w-0">
+          <h3 className="head text-sm font-bold text-zinc-900 dark:text-zinc-50">Live feed</h3>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">latest pageviews, as they happen</p>
+        </div>
+      </div>
+      <div className="mt-3 max-h-80 flex-1 overflow-y-auto">
+        {feed.map((f, i) => (
+          <div key={`${f.ts}-${i}`} className="flex items-center gap-2.5 border-b border-[var(--card-border)] py-2 text-sm last:border-0">
+            {f.country
+              ? <img src={`https://purecatamphetamine.github.io/country-flag-icons/3x2/${f.country.toUpperCase()}.svg`} alt="" width={18} height={13} className="h-[13px] w-[18px] shrink-0 rounded-[2px] object-cover" onError={hideBroken} />
+              : <span className="w-[18px] shrink-0" />}
+            <span className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-700 dark:text-zinc-200" title={f.path}>{f.path}</span>
+            <span className="shrink-0 truncate text-[11px] text-zinc-400 dark:text-zinc-500">{SOURCE_LABEL[f.source] ?? cap(f.source)}</span>
+            <span className="shrink-0 tabular-nums text-[11px] text-zinc-400 dark:text-zinc-500">{timeAgo(f.ts)}</span>
+          </div>
+        ))}
+        {feed.length === 0 && <p className="py-10 text-center text-sm text-zinc-400 dark:text-zinc-600">No pageviews in the last 24 hours.</p>}
+      </div>
+    </div>
+  );
+}
+
+// Hourly heatmap: when your audience is on the site (last 4 weeks).
+function HeatmapCard({ cells }: { cells: { d: number; h: number; c: number }[] }) {
+  const max = cells.reduce((a, b) => Math.max(a, b.c), 0);
+  const byKey = new Map(cells.map((c) => [`${c.d}-${c.h}`, c.c]));
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return (
+    <div className="card flex h-full flex-col p-5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#ffa950]/15 text-[#b06a1f] dark:bg-[#ffa950]/10 dark:text-[#ffa950]"><ClockIcon /></span>
+        <div className="min-w-0">
+          <h3 className="head text-sm font-bold text-zinc-900 dark:text-zinc-50">Busy hours</h3>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">visitors by hour · last 4 weeks (UTC)</p>
+        </div>
+      </div>
+      <div className="mt-4 flex-1">
+        {days.map((day, di) => (
+          <div key={day} className="mb-[3px] flex items-center gap-1.5">
+            <span className="w-8 shrink-0 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">{day}</span>
+            <div className="grid flex-1 gap-[3px]" style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}>
+              {Array.from({ length: 24 }, (_, h) => {
+                const c = byKey.get(`${di + 1}-${h}`) ?? 0;
+                const alpha = max > 0 ? c / max : 0;
+                return <span key={h} title={`${day} ${String(h).padStart(2, '0')}:00 — ${fmt(c)} visitors`} className="aspect-square rounded-[3px]" style={alpha === 0 ? { backgroundColor: 'rgba(128,128,140,0.12)' } : { backgroundColor: '#ffa950', opacity: 0.15 + alpha * 0.85 }} />;
+              })}
+            </div>
+          </div>
+        ))}
+        <div className="ml-9 mt-1 flex justify-between text-[9px] text-zinc-400 dark:text-zinc-600"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>
+      </div>
+    </div>
+  );
+}
+
+// Funnel: visitors completing each configured step, with pass-through rates.
+function FunnelCard({ siteId, funnel, onSaved }: { siteId: string; funnel: { steps: string[]; counts: number[] } | null; onSaved: () => void }) {
+  const [edit, setEdit] = useState(false);
+  const top = funnel?.counts[0] ?? 0;
+  return (
+    <div className="card flex h-full flex-col p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#ffa950]/15 text-[#b06a1f] dark:bg-[#ffa950]/10 dark:text-[#ffa950]"><FunnelIcon /></span>
+          <div className="min-w-0">
+            <h3 className="head text-sm font-bold text-zinc-900 dark:text-zinc-50">Funnel</h3>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">visitors completing each step</p>
+          </div>
+        </div>
+        <button onClick={() => setEdit(true)} className="shrink-0 text-xs font-semibold text-zinc-400 transition-colors hover:text-zinc-800 dark:hover:text-zinc-100">{funnel ? 'Edit' : 'Set up'}</button>
+      </div>
+      <div className="mt-4 flex-1">
+        {funnel ? (
+          <div className="space-y-3">
+            {funnel.steps.map((step, i) => {
+              const c = funnel.counts[i] ?? 0;
+              const pct = top > 0 ? Math.round((c / top) * 100) : 0;
+              const prevC = i === 0 ? c : funnel.counts[i - 1] ?? 0;
+              const stepRate = i === 0 ? null : prevC > 0 ? Math.round((c / prevC) * 100) : 0;
+              return (
+                <div key={`${step}-${i}`}>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0 truncate font-mono text-xs text-zinc-700 dark:text-zinc-200">{i + 1}. {step}</span>
+                    <span className="shrink-0 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">{fmt(c)}{stepRate !== null && <span className="ml-1.5 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">{stepRate}% of previous</span>}</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+                    <span className="block h-full rounded-full bg-[#ffa950] transition-[width] duration-500" style={{ width: `${Math.max(2, pct)}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="px-2 py-8 text-center text-sm text-zinc-400 dark:text-zinc-600">Define 2 to 4 pages (for example /pricing then /signup) to see how many visitors make it through.</p>
+        )}
+      </div>
+      {edit && <FunnelModal siteId={siteId} initial={funnel?.steps ?? []} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); onSaved(); }} />}
+    </div>
+  );
+}
+
+function FunnelModal({ siteId, initial, onClose, onSaved }: { siteId: string; initial: string[]; onClose: () => void; onSaved: () => void }) {
+  const [steps, setSteps] = useState<string[]>([...initial, '', '', '', ''].slice(0, 4));
+  const [busy, setBusy] = useState(false);
+  const clean = steps.map((p) => p.trim()).filter(Boolean);
+  return (
+    <Overlay onClose={onClose}>
+      <h3 className="head mb-1 text-lg font-bold text-zinc-900 dark:text-zinc-50">Funnel steps</h3>
+      <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">Exact page paths, in order. A visitor counts for a step if they visited the pages in this order within 7 days.</p>
+      <div className="space-y-2">
+        {steps.map((p, i) => (
+          <input key={i} value={p} onChange={(e) => setSteps((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))} placeholder={i === 0 ? '/pricing' : i === 1 ? '/signup' : 'Optional step'} className="field font-mono text-xs" />
+        ))}
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">Cancel</button>
+        <button
+          disabled={busy || clean.length < 2}
+          onClick={async () => { setBusy(true); await fetch(`/api/funnel?site=${encodeURIComponent(siteId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ steps: clean }) }); setBusy(false); onSaved(); }}
+          className="btn-primary"
+        >{busy ? 'Saving…' : 'Save funnel'}</button>
+      </div>
+    </Overlay>
+  );
+}
+
+// Retention: for each week's new visitors, the share that came back.
+function RetentionCard({ rows }: { rows: { cohort: string; offset: number; n: number }[] }) {
+  const cohorts = [...new Set(rows.map((r) => r.cohort))].sort().slice(-8);
+  const byKey = new Map(rows.map((r) => [`${r.cohort}-${r.offset}`, r.n]));
+  const maxOffset = 7;
+  return (
+    <div className="card flex h-full flex-col p-5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#ffa950]/15 text-[#b06a1f] dark:bg-[#ffa950]/10 dark:text-[#ffa950]"><RepeatIcon /></span>
+        <div className="min-w-0">
+          <h3 className="head text-sm font-bold text-zinc-900 dark:text-zinc-50">Retention</h3>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">% of each week&apos;s visitors coming back</p>
+        </div>
+      </div>
+      <div className="mt-4 flex-1 overflow-x-auto">
+        {cohorts.length === 0 ? (
+          <p className="px-2 py-8 text-center text-sm text-zinc-400 dark:text-zinc-600">Weekly cohorts appear once visitors start returning.</p>
+        ) : (
+          <div className="min-w-[22rem]">
+            <div className="mb-1 flex items-center gap-1"><span className="w-16 shrink-0" />{Array.from({ length: maxOffset + 1 }, (_, i) => <span key={i} className="flex-1 text-center text-[9px] font-medium text-zinc-400 dark:text-zinc-500">W{i}</span>)}</div>
+            {cohorts.map((c) => {
+              const size = byKey.get(`${c}-0`) ?? 0;
+              const d = parseKey(c);
+              return (
+                <div key={c} className="mb-1 flex items-center gap-1">
+                  <span className="w-16 shrink-0 text-[10px] font-medium text-zinc-500 dark:text-zinc-400">{d ? `${d.getDate()} ${MONTHS[d.getMonth()]}` : c}</span>
+                  {Array.from({ length: maxOffset + 1 }, (_, o) => {
+                    const v = byKey.get(`${c}-${o}`) ?? 0;
+                    const pct = size > 0 ? Math.round((v / size) * 100) : 0;
+                    const active = o === 0 ? size > 0 : v > 0;
+                    return <span key={o} title={`${fmt(v)} visitors (${pct}%)`} className="flex h-7 flex-1 items-center justify-center rounded-md text-[9px] font-semibold tabular-nums" style={active ? { background: `rgba(255,169,80,${0.12 + Math.min(1, pct / 100) * 0.75})`, color: pct > 45 ? '#573310' : undefined } : { background: 'rgba(128,128,140,0.08)' }}>{active ? `${pct}%` : ''}</span>;
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Revenue attribution: which sources and campaigns actually bring money.
+function RevenueAttribCard({ data, currency, siteId }: { data?: { source: { name: string; amount: number }[]; campaign: { name: string; amount: number }[] }; currency: string; siteId: string }) {
+  const [tab, setTab] = useState<'source' | 'campaign'>('source');
+  const rows = (tab === 'source' ? data?.source : data?.campaign) ?? [];
+  const max = rows[0]?.amount ?? 1;
+  return (
+    <div className="card flex h-full flex-col p-5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#ffa950]/15 text-[#b06a1f] dark:bg-[#ffa950]/10 dark:text-[#ffa950]"><CoinIcon /></span>
+        <div className="min-w-0">
+          <h3 className="head text-sm font-bold text-zinc-900 dark:text-zinc-50">Revenue attribution</h3>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">which traffic actually brings money</p>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3 border-b border-[var(--card-border)]">
+        <div className="flex gap-4">
+          {(['source', 'campaign'] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)} className={`-mb-px border-b-2 pb-2 text-xs font-semibold capitalize transition-colors ${tab === t ? 'border-[#ffa950] text-zinc-900 dark:text-zinc-50' : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'}`}>{t}</button>
+          ))}
+        </div>
+        <span className="shrink-0 pb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Revenue</span>
+      </div>
+      <div className="mt-4 flex-1">
+        {rows.length > 0 ? rows.slice(0, 10).map((r) => (
+          <div key={r.name} className="py-[7px]">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate text-zinc-700 dark:text-zinc-200">{SOURCE_LABEL[r.name] ?? cap(r.name || 'direct')}</span>
+              <span className="shrink-0 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">{fmtMoney(r.amount, currency)}</span>
+            </div>
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+              <span className="block h-full rounded-full bg-[#ffa950]" style={{ width: `${Math.max(2, Math.round((r.amount / Math.max(1, max)) * 100))}%` }} />
+            </div>
+          </div>
+        )) : (
+          <div className="px-2 py-6 text-center text-sm text-zinc-400 dark:text-zinc-600">
+            <p>Add one line on your thank-you page and every sale gets attributed to its traffic source:</p>
+            <pre className="mx-auto mt-3 w-fit rounded-lg bg-black/[0.05] px-3 py-2 text-left font-mono text-xs text-zinc-600 dark:bg-white/[0.06] dark:text-zinc-300">{`insight('purchase', { amount: 99, currency: 'usd' })`}</pre>
+            <p className="mt-2 text-xs">Works with the script already installed on {siteId || 'your site'}.</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -957,6 +1264,11 @@ const ChipIcon = () => <Ico><rect width="16" height="16" x="4" y="4" rx="2" /><r
 const ExpandIcon = () => <Ico><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></Ico>;
 const ChevLeft = () => <Ico><path d="m15 18-6-6 6-6" /></Ico>;
 const ChevRight = () => <Ico><path d="m9 18 6-6-6-6" /></Ico>;
+const PulseIcon = () => <Ico><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" /></Ico>;
+const ClockIcon = () => <Ico><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></Ico>;
+const FunnelIcon = () => <Ico><path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" /></Ico>;
+const RepeatIcon = () => <Ico><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></Ico>;
+const CoinIcon = () => <Ico><circle cx="12" cy="12" r="10" /><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" /><path d="M12 18V6" /></Ico>;
 const CalIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></svg>;
 
 function PlusIcon() {
@@ -1169,6 +1481,44 @@ function Snippet({ id }: { id: string }) {
   );
 }
 
+
+// Chart annotations: add or remove small dated notes (deploy, campaign...).
+function NoteModal({ siteId, notes, onClose, onChanged }: { siteId: string; notes: { date: string; text: string }[]; onClose: () => void; onChanged: () => void }) {
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <Overlay onClose={onClose}>
+      <h3 className="head mb-1 text-lg font-bold text-zinc-900 dark:text-zinc-50">Chart notes</h3>
+      <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">Mark a launch, a deploy or a viral post to explain traffic spikes.</p>
+      <div className="flex gap-2">
+        <input type="date" value={date} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDate(e.target.value)} className="field w-36 shrink-0" />
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="What happened?" className="field" />
+      </div>
+      <div className="mt-3 flex justify-end">
+        <button
+          disabled={busy || !text.trim()}
+          onClick={async () => { setBusy(true); await fetch(`/api/notes?site=${encodeURIComponent(siteId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, text }) }); setBusy(false); setText(''); onChanged(); }}
+          className="btn-primary"
+        >{busy ? 'Adding…' : 'Add note'}</button>
+      </div>
+      {notes.length > 0 && (
+        <div className="mt-4 max-h-48 overflow-y-auto border-t border-[var(--card-border)] pt-3">
+          {notes.map((nt, i) => (
+            <div key={`${nt.date}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
+              <span className="shrink-0 tabular-nums text-xs text-zinc-400">{nt.date}</span>
+              <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-200">{nt.text}</span>
+              <button
+                onClick={async () => { await fetch(`/api/notes?site=${encodeURIComponent(siteId)}&date=${nt.date}&text=${encodeURIComponent(nt.text)}`, { method: 'DELETE' }); onChanged(); }}
+                aria-label="Delete note" className="shrink-0 text-zinc-400 transition-colors hover:text-rose-500"
+              ><CloseIcon /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Overlay>
+  );
+}
 
 // Modern range picker: a real month calendar with visual range selection,
 // quick presets, and a summary of the chosen span.

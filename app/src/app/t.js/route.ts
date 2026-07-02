@@ -17,10 +17,22 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   var ENDPOINT = 'https://insight.nicolaslecocq.com/api/collect';
   var start = Date.now();
   var sent = false;
+  // Stable first-party visitor id (enables returning visitors and revenue
+  // attribution). Falls back silently if storage is unavailable.
+  var iid = '';
+  try {
+    iid = localStorage.getItem('_ins_id') || '';
+    if (!iid) {
+      iid = ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, function (c) {
+        return (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16);
+      });
+      localStorage.setItem('_ins_id', iid);
+    }
+  } catch (e) {}
   function payload(type, extra) {
     var u = new URL(location.href);
     var body = {
-      site: site, type: type, url: location.href, path: location.pathname, query: location.search,
+      site: site, type: type, iid: iid, url: location.href, path: location.pathname, query: location.search,
       referrer: document.referrer || '', lang: navigator.language || '',
       sw: window.screen ? window.screen.width : 0,
       utm_source: u.searchParams.get('utm_source') || '', utm_medium: u.searchParams.get('utm_medium') || '',
@@ -69,6 +81,15 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   window.addEventListener('focus', function () { sent = false; bump(); ping(); });
   window.addEventListener('blur', function () { focused = false; });
   window.addEventListener('pagehide', function () { clearInterval(hb); bye(); });
+  // Public API: window.insight('purchase', { amount: 99, currency: 'usd' })
+  // on a thank-you page attributes revenue to this visitor's source.
+  window.insight = function (name, props) {
+    if (name === 'purchase' && props && typeof props.amount === 'number') {
+      send('purchase', { amount: props.amount, currency: props.currency || 'usd' });
+    } else if (typeof name === 'string' && name) {
+      send('goal', { goal: String(name).slice(0, 64) });
+    }
+  };
 })();`;
 
 function jsResponse(): NextResponse {
