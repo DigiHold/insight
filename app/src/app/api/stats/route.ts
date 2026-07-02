@@ -69,30 +69,33 @@ interface RevRow { key: string; amount: string }
 // "before the window" condition used for new vs returning.
 async function extraData(site: string, all: boolean, filter: string, params: Record<string, unknown> | undefined, win: string, beforeExpr: string) {
   const pv = `event_type = 'pageview' AND ${win}${filter}`;
-  const brk = (col: string, extra = '') => queryRows<CountRow>(`SELECT ${col} AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv}${extra} GROUP BY key ORDER BY c DESC LIMIT 50`, params);
-  const funnelSteps = all ? [] : ((await getJson<string[]>(`funnel-${site}`)) ?? []);
+  // Each extra query is independently fail-safe: a single broken query returns
+  // an empty list instead of taking down the whole dashboard.
+  const safe = <T,>(p: Promise<T[]>): Promise<T[]> => p.catch(() => [] as T[]);
+  const brk = (col: string, extra = '') => safe(queryRows<CountRow>(`SELECT ${col} AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv}${extra} GROUP BY key ORDER BY c DESC LIMIT 50`, params));
+  const funnelSteps = all ? [] : ((await getJson<string[]>(`funnel-${site}`).catch(() => [])) ?? []);
 
   const [landing, exits, outbound, utmMedium, utmTerm, utmContent, languages, cities, regions, returning, totalV, heatmap, retention, revChannel, revCampaign, funnelRows] = await Promise.all([
-    queryRows<CountRow>(`SELECT lp AS key, uniqExact(visitor_id) AS c FROM (SELECT visitor_id, argMin(pathname, ts) AS lp FROM events WHERE ${pv} GROUP BY visitor_id) GROUP BY key ORDER BY c DESC LIMIT 50`, params),
-    queryRows<CountRow>(`SELECT lp AS key, uniqExact(visitor_id) AS c FROM (SELECT visitor_id, argMax(pathname, ts) AS lp FROM events WHERE ${pv} GROUP BY visitor_id) GROUP BY key ORDER BY c DESC LIMIT 50`, params),
-    queryRows<CountRow>(`SELECT click_target AS key, count() AS c FROM events WHERE event_type = 'click' AND click_target != '' AND ${win}${filter} GROUP BY key ORDER BY c DESC LIMIT 50`, params),
+    safe(queryRows<CountRow>(`SELECT lp AS key, uniqExact(visitor_id) AS c FROM (SELECT visitor_id, argMin(pathname, ts) AS lp FROM events WHERE ${pv} GROUP BY visitor_id) GROUP BY key ORDER BY c DESC LIMIT 50`, params)),
+    safe(queryRows<CountRow>(`SELECT lp AS key, uniqExact(visitor_id) AS c FROM (SELECT visitor_id, argMax(pathname, ts) AS lp FROM events WHERE ${pv} GROUP BY visitor_id) GROUP BY key ORDER BY c DESC LIMIT 50`, params)),
+    safe(queryRows<CountRow>(`SELECT click_target AS key, count() AS c FROM events WHERE event_type = 'click' AND click_target != '' AND ${win}${filter} GROUP BY key ORDER BY c DESC LIMIT 50`, params)),
     brk('utm_medium', " AND utm_medium != ''"),
     brk('utm_term', " AND utm_term != ''"),
     brk('utm_content', " AND utm_content != ''"),
     brk("lower(substring(language, 1, 2))", " AND language != ''"),
     brk('city', " AND city != ''"),
     brk('region', " AND region != ''"),
-    queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE ${pv} AND visitor_id IN (SELECT visitor_id FROM events WHERE event_type = 'pageview' AND ${beforeExpr}${filter})`, params),
-    queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE ${pv}`, params),
-    queryRows<HeatCell>(`SELECT toDayOfWeek(ts) AS d, toHour(ts) AS h, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 28 DAY${filter} GROUP BY d, h`, params),
-    queryRows<CohortRow>(`SELECT toString(cohort) AS cohort, dateDiff('week', cohort, wk) AS offset, uniqExact(e.visitor_id) AS n FROM (SELECT visitor_id, toStartOfWeek(ts) AS wk FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 63 DAY${filter} GROUP BY visitor_id, wk) AS e INNER JOIN (SELECT visitor_id, min(toStartOfWeek(ts)) AS cohort FROM events WHERE event_type = 'pageview'${filter} GROUP BY visitor_id HAVING cohort >= toStartOfWeek(now() - INTERVAL 63 DAY)) AS f ON e.visitor_id = f.visitor_id WHERE wk >= cohort GROUP BY cohort, offset ORDER BY cohort, offset`, params),
-    queryRows<RevRow>(`SELECT source AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} GROUP BY key ORDER BY amount DESC LIMIT 30`, params),
-    queryRows<RevRow>(`SELECT campaign AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} AND campaign != '' GROUP BY key ORDER BY amount DESC LIMIT 30`, params),
+    safe(queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE ${pv} AND visitor_id IN (SELECT visitor_id FROM events WHERE event_type = 'pageview' AND ${beforeExpr}${filter})`, params)),
+    safe(queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE ${pv}`, params)),
+    safe(queryRows<HeatCell>(`SELECT toDayOfWeek(ts) AS d, toHour(ts) AS h, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 28 DAY${filter} GROUP BY d, h`, params)),
+    safe(queryRows<CohortRow>(`SELECT toString(coh) AS cohort, dateDiff('week', coh, wk) AS offset, uniqExact(vid) AS n FROM (SELECT e.visitor_id AS vid, e.wk AS wk, f.cohort AS coh FROM (SELECT visitor_id, toStartOfWeek(ts) AS wk FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 63 DAY${filter} GROUP BY visitor_id, wk) AS e INNER JOIN (SELECT visitor_id, min(toStartOfWeek(ts)) AS cohort FROM events WHERE event_type = 'pageview'${filter} GROUP BY visitor_id HAVING min(toStartOfWeek(ts)) >= toStartOfWeek(now() - INTERVAL 63 DAY)) AS f ON e.visitor_id = f.visitor_id WHERE e.wk >= f.cohort) GROUP BY coh, offset ORDER BY coh, offset`, params)),
+    safe(queryRows<RevRow>(`SELECT source AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} GROUP BY key ORDER BY amount DESC LIMIT 30`, params)),
+    safe(queryRows<RevRow>(`SELECT campaign AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} AND campaign != '' GROUP BY key ORDER BY amount DESC LIMIT 30`, params)),
     funnelSteps.length >= 2
-      ? queryRows<{ level: string; c: string }>(
+      ? safe(queryRows<{ level: string; c: string }>(
           `SELECT level, count() AS c FROM (SELECT visitor_id, windowFunnel(604800)(ts, ${funnelSteps.map((_, i) => `pathname = {f${i}:String}`).join(', ')}) AS level FROM events WHERE ${pv} GROUP BY visitor_id) WHERE level > 0 GROUP BY level`,
           { ...(params ?? {}), ...Object.fromEntries(funnelSteps.map((p, i) => [`f${i}`, p])) },
-        )
+        ))
       : Promise.resolve([] as { level: string; c: string }[]),
   ]);
 
