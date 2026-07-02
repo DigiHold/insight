@@ -337,14 +337,14 @@ export default function Dashboard() {
   );
 
   const periodPills = (grow: boolean) => sites.length > 0 && (
-    <div className={`${grow ? 'grid w-full grid-cols-5' : 'flex'} rounded-full border border-[var(--card-border)] bg-[var(--card-bg)] p-1 backdrop-blur-xl`}>
+    <div className={`${grow ? 'grid w-full grid-cols-5' : 'flex'} rounded-full border border-[var(--card-border)] bg-[var(--card-bg)] p-1`}>
       {(['today', '7d', '30d', '90d', 'custom'] as Period[]).map((p) => (
         <button
           key={p}
           onClick={() => { if (p === 'custom') { setPeriod('custom'); setRangeOpen(true); } else setPeriod(p); }}
           className={`rounded-full px-2.5 py-1.5 text-xs font-semibold transition-all sm:px-3 ${period === p ? 'bg-[#ffa950] text-[#573310] shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
         >
-          {p === 'today' ? 'Today' : p === 'custom' ? 'Custom' : p.toUpperCase()}
+          {p === 'today' ? 'Today' : p === 'custom' ? <span className="inline-flex items-center gap-1"><CalIcon />Custom</span> : p.toUpperCase()}
         </button>
       ))}
     </div>
@@ -955,6 +955,9 @@ const SignalIcon = () => <Ico><path d="M2 20h.01" /><path d="M7 20v-4" /><path d
 const FileIcon = () => <Ico><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /></Ico>;
 const ChipIcon = () => <Ico><rect width="16" height="16" x="4" y="4" rx="2" /><rect width="6" height="6" x="9" y="9" rx="1" /><path d="M15 2v2" /><path d="M15 20v2" /><path d="M2 15h2" /><path d="M2 9h2" /><path d="M20 15h2" /><path d="M20 9h2" /><path d="M9 2v2" /><path d="M9 20v2" /></Ico>;
 const ExpandIcon = () => <Ico><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></Ico>;
+const ChevLeft = () => <Ico><path d="m15 18-6-6 6-6" /></Ico>;
+const ChevRight = () => <Ico><path d="m9 18 6-6-6-6" /></Ico>;
+const CalIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></svg>;
 
 function PlusIcon() {
   return <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>;
@@ -1049,7 +1052,7 @@ function Dropdown({ value, options, onChange, wide }: { value: string; options: 
   return (
     <Menu
       align="left"
-      buttonClass={`flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm font-semibold text-zinc-800 backdrop-blur-xl transition-colors hover:border-[#ffa950]/50 dark:text-zinc-100 ${wide ? 'w-full' : ''}`}
+      buttonClass={`flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm font-semibold text-zinc-800 transition-colors hover:border-[#ffa950]/50 dark:text-zinc-100 ${wide ? 'w-full' : ''}`}
       button={<>{current?.icon}<span className={`truncate ${wide ? 'flex-1 text-left' : 'max-w-[9rem]'}`}>{current?.label ?? 'Select'}</span><ChevronDown /></>}
     >
       {(close) => options.map((o) => (
@@ -1167,37 +1170,104 @@ function Snippet({ id }: { id: string }) {
 }
 
 
+// Modern range picker: a real month calendar with visual range selection,
+// quick presets, and a summary of the chosen span.
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+const toKey = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
 function RangeModal({ initial, onApply, onClose }: { initial: { from: string; to: string }; onApply: (r: { from: string; to: string }) => void; onClose: () => void }) {
-  const [from, setFrom] = useState(initial.from);
-  const [to, setTo] = useState(initial.to);
-  const today = new Date().toISOString().slice(0, 10);
-  const valid = !!from && !!to && from <= to && to <= today;
-  const preset = (days: number) => {
-    setTo(new Date(Date.now() - 86400000).toISOString().slice(0, 10));
-    setFrom(new Date(Date.now() - days * 86400000).toISOString().slice(0, 10));
+  const [start, setStart] = useState<string>(initial.from);
+  const [end, setEnd] = useState<string>(initial.to);
+  const [view, setView] = useState<{ y: number; m: number }>(() => {
+    const d = parseKey(initial.to) ?? new Date();
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
+  const todayKey = toKey(new Date());
+  const valid = !!start && !!end && start <= end;
+
+  const pick = (key: string) => {
+    if (!start || (start && end)) { setStart(key); setEnd(''); return; }
+    if (key < start) { setEnd(start); setStart(key); return; }
+    setEnd(key);
   };
+  const preset = (days: number) => {
+    const to = new Date(Date.now() - 86400000);
+    const from = new Date(Date.now() - days * 86400000);
+    setStart(toKey(from));
+    setEnd(toKey(to));
+    setView({ y: to.getFullYear(), m: to.getMonth() });
+  };
+  const nav = (dir: number) => setView((v) => {
+    const d = new Date(v.y, v.m + dir, 1);
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
+
+  const first = new Date(view.y, view.m, 1);
+  const offset = (first.getDay() + 6) % 7; // Monday-first grid
+  const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
+  const cells: (string | null)[] = [
+    ...Array.from({ length: offset }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => toKey(new Date(view.y, view.m, i + 1))),
+  ];
+  const fmtLong = (k: string): string => { const d = parseKey(k); return d ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : k; };
+
   return (
     <Overlay onClose={onClose}>
       <h3 className="head mb-1 text-lg font-bold text-zinc-900 dark:text-zinc-50">Custom date range</h3>
-      <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">Pick the exact dates you want to analyze.</p>
+      <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">Click a start date, then an end date.</p>
+
       <div className="mb-4 flex flex-wrap gap-1.5">
-        {[{ l: 'Last 14 days', d: 14 }, { l: 'Last 28 days', d: 28 }, { l: 'Last 60 days', d: 60 }, { l: 'Last 180 days', d: 180 }].map((pr) => (
+        {[{ l: '14 days', d: 14 }, { l: '28 days', d: 28 }, { l: '60 days', d: 60 }, { l: '180 days', d: 180 }].map((pr) => (
           <button key={pr.d} onClick={() => preset(pr.d)} className="rounded-full border border-[var(--card-border)] px-3 py-1 text-xs font-semibold text-zinc-500 transition-colors hover:border-[#ffa950]/60 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100">{pr.l}</button>
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">From</span>
-          <input type="date" value={from} max={to || today} onChange={(e) => setFrom(e.target.value)} className="field" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">To</span>
-          <input type="date" value={to} min={from} max={today} onChange={(e) => setTo(e.target.value)} className="field" />
-        </label>
+
+      <div className="rounded-xl border border-[var(--card-border)] p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <button onClick={() => nav(-1)} aria-label="Previous month" className="flex size-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100"><ChevLeft /></button>
+          <span className="head text-sm font-bold text-zinc-900 dark:text-zinc-50">{MONTHS_FULL[view.m]} {view.y}</span>
+          <button onClick={() => nav(1)} aria-label="Next month" className="flex size-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100"><ChevRight /></button>
+        </div>
+        <div className="grid grid-cols-7 text-center">
+          {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => (
+            <span key={d} className="pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{d}</span>
+          ))}
+          {cells.map((key, i) => {
+            if (!key) return <span key={`b${i}`} />;
+            const future = key > todayKey;
+            const isStart = key === start;
+            const isEnd = key === end || (isStart && !end);
+            const inRange = !!start && !!end && key > start && key < end;
+            return (
+              <button
+                key={key}
+                disabled={future}
+                onClick={() => pick(key)}
+                className={`relative mx-auto my-0.5 flex size-9 items-center justify-center text-[13px] tabular-nums transition-colors ${
+                  isStart || isEnd
+                    ? 'rounded-xl bg-[#ffa950] font-bold text-[#573310]'
+                    : inRange
+                      ? 'rounded-none bg-[#ffa950]/15 text-zinc-800 dark:text-zinc-100'
+                      : future
+                        ? 'rounded-xl text-zinc-300 dark:text-zinc-700'
+                        : 'rounded-xl text-zinc-700 hover:bg-black/[0.06] dark:text-zinc-200 dark:hover:bg-white/[0.08]'
+                }`}
+              >
+                {Number(key.slice(8, 10))}
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <div className="mt-5 flex justify-end gap-2">
-        <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">Cancel</button>
-        <button disabled={!valid} onClick={() => onApply({ from, to })} className="btn-primary">Apply range</button>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <span className="min-w-0 truncate text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+          {start ? fmtLong(start) : '…'} <span className="text-zinc-400">→</span> {end ? fmtLong(end) : '…'}
+        </span>
+        <span className="flex shrink-0 gap-2">
+          <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">Cancel</button>
+          <button disabled={!valid} onClick={() => onApply({ from: start, to: end })} className="btn-primary">Apply</button>
+        </span>
       </div>
     </Overlay>
   );
