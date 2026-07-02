@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type SyntheticEvent } from 'react';
-import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
+import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
 import dynamic from 'next/dynamic';
 
 const GlobeModal = dynamic(() => import('./globe'), { ssr: false });
@@ -222,7 +222,12 @@ export default function Dashboard() {
   const hasRevenue = chartData.some((d) => d.r > 0);
   const currency = data?.revenue?.currency ?? 'usd';
   const metrics = buildMetrics(data);
-  const metricCols = metrics.length === 8 ? 'xl:grid-cols-8' : 'xl:grid-cols-5';
+  // The hero shows Visitors huge; the other metrics become compact chips.
+  // Online lives in the topbar as the live chip (click opens the globe).
+  const hero = metrics.find((m) => m.label === 'Visitors');
+  const chips = metrics.filter((m) => !m.live && m.label !== 'Visitors');
+  const online = data?.online ?? 0;
+  const periodTag = period === 'today' ? 'Today' : period === '7d' ? 'Last 7 days' : period === '30d' ? 'Last 30 days' : 'Last 90 days';
 
   const channelItems: Item[] = (data?.channels ?? []).map((s) => ({
     key: s.name,
@@ -271,79 +276,103 @@ export default function Dashboard() {
     ]),
   };
 
+  const logout = async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; };
+
   return (
     <div className="min-h-screen" onMouseMove={trackSpotlight}>
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-5">
-        <header className="fade-up mb-7 flex flex-wrap items-center justify-between gap-3">
-          <Logo />
-          <div className="flex flex-wrap items-center gap-2">
-            {sites.length > 0 && (
-              <>
-                <Dropdown
-                  value={siteId}
-                  onChange={setSiteId}
-                  options={sites.map((s) => ({
-                    value: s.id,
-                    label: s.name,
-                    icon: <SiteFavicon id={s.id} url={s.url} />,
-                  }))}
-                />
-                <div className="flex rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-0.5 backdrop-blur-xl">
+      <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+          <header className="fade-up mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+              <Logo />
+              {sites.length > 0 && (
+                <>
+                  <Dropdown
+                    value={siteId}
+                    onChange={setSiteId}
+                    options={sites.map((s) => ({
+                      value: s.id,
+                      label: s.name,
+                      icon: <SiteFavicon id={s.id} url={s.url} />,
+                    }))}
+                  />
+                  {site && (
+                    <Menu align="left" buttonClass="flex size-9 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-700 dark:hover:bg-white/[0.07] dark:hover:text-zinc-200" button={<DotsIcon />}>
+                      {(close) => (
+                        <>
+                          <MenuItem icon={<CodeIcon />} onClick={() => { setModal({ type: 'script', site }); close(); }}>Show tracking script</MenuItem>
+                          <MenuItem icon={<LinkIcon />} onClick={() => { setModal({ type: 'url', site }); close(); }}>Set website URL</MenuItem>
+                          {site.stripe
+                            ? <MenuItem icon={<StripeIcon />} onClick={async () => { await fetch(`/api/sites/stripe?siteId=${site.id}`, { method: 'DELETE' }); loadSites(); close(); }}>Disconnect Stripe</MenuItem>
+                            : <MenuItem icon={<StripeIcon />} onClick={() => { setModal({ type: 'stripe', site }); close(); }}>Connect Stripe</MenuItem>}
+                          {site.ga4
+                            ? <MenuItem icon={<GaIcon />} onClick={async () => { await fetch(`/api/sites/ga4?siteId=${site.id}`, { method: 'DELETE' }); loadSites(); close(); }}>Disconnect GA4</MenuItem>
+                            : <MenuItem icon={<GaIcon />} onClick={() => { setModal({ type: 'ga4', site }); close(); }}>Connect GA4</MenuItem>}
+                          <MenuItem danger icon={<TrashIcon />} onClick={async () => {
+                            close();
+                            if (!confirm(`Delete ${site.name}? This permanently removes the site and all its Insight + GA4 data and favicon.`)) return;
+                            await fetch(`/api/sites?id=${site.id}`, { method: 'DELETE' });
+                            loadSites();
+                          }}>Delete site</MenuItem>
+                        </>
+                      )}
+                    </Menu>
+                  )}
+                  <button
+                    onClick={() => setGlobeOpen(true)}
+                    title="Open the live map"
+                    className="flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/[0.08] py-1.5 pl-2.5 pr-3 text-xs font-semibold text-emerald-700 transition-colors hover:border-emerald-500/50 dark:text-emerald-400"
+                  >
+                    <span className="relative flex size-2">
+                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-70" />
+                      <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                    </span>
+                    <span className="tabular-nums">{fmt(online)}</span> live
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {sites.length > 0 && (
+                <div className="flex rounded-full border border-[var(--card-border)] bg-[var(--card-bg)] p-1 backdrop-blur-xl">
                   {(['today', '7d', '30d', '90d'] as Period[]).map((p) => (
                     <button
                       key={p}
                       onClick={() => setPeriod(p)}
-                      className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${period === p ? 'bg-[#ffa950] text-[#573310]' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${period === p ? 'bg-[#ffa950] text-[#573310] shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
                     >
                       {p === 'today' ? 'Today' : p.toUpperCase()}
                     </button>
                   ))}
                 </div>
-              </>
-            )}
-            <button onClick={() => setModal({ type: 'add' })} className="btn-primary"><PlusIcon /> Add site</button>
-            {site && (
-              <Menu align="right" buttonClass="btn-ghost px-2.5" button={<DotsIcon />}>
-                {(close) => (
-                  <>
-                    <MenuItem icon={<CodeIcon />} onClick={() => { setModal({ type: 'script', site }); close(); }}>Show tracking script</MenuItem>
-                    <MenuItem icon={<LinkIcon />} onClick={() => { setModal({ type: 'url', site }); close(); }}>Set website URL</MenuItem>
-                    {site.stripe
-                      ? <MenuItem icon={<StripeIcon />} onClick={async () => { await fetch(`/api/sites/stripe?siteId=${site.id}`, { method: 'DELETE' }); loadSites(); close(); }}>Disconnect Stripe</MenuItem>
-                      : <MenuItem icon={<StripeIcon />} onClick={() => { setModal({ type: 'stripe', site }); close(); }}>Connect Stripe</MenuItem>}
-                    {site.ga4
-                      ? <MenuItem icon={<GaIcon />} onClick={async () => { await fetch(`/api/sites/ga4?siteId=${site.id}`, { method: 'DELETE' }); loadSites(); close(); }}>Disconnect GA4</MenuItem>
-                      : <MenuItem icon={<GaIcon />} onClick={() => { setModal({ type: 'ga4', site }); close(); }}>Connect GA4</MenuItem>}
-                    <MenuItem danger icon={<TrashIcon />} onClick={async () => {
-                      close();
-                      if (!confirm(`Delete ${site.name}? This permanently removes the site and all its Insight + GA4 data and favicon.`)) return;
-                      await fetch(`/api/sites?id=${site.id}`, { method: 'DELETE' });
-                      loadSites();
-                    }}>Delete site</MenuItem>
-                  </>
-                )}
-              </Menu>
-            )}
-            <button
-              onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; }}
-              aria-label="Log out"
-              title="Log out"
-              className="flex size-9 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 shadow-sm transition-all hover:bg-rose-50 active:scale-[0.98] dark:border-rose-900/50 dark:bg-zinc-900 dark:text-rose-400 dark:hover:bg-rose-950/40"
-            >
-              <PowerIcon />
-            </button>
-          </div>
-        </header>
+              )}
+              <button onClick={() => setModal({ type: 'add' })} className="btn-primary max-sm:px-3"><PlusIcon /><span className="hidden sm:inline">Add site</span></button>
+              <button onClick={logout} aria-label="Log out" title="Log out" className="flex size-9 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10"><PowerIcon /></button>
+            </div>
+          </header>
 
         {sites.length === 0 ? (
           <Onboarding onAdd={() => setModal({ type: 'add' })} />
         ) : (
           <>
-            <section className="card fade-up mb-5 overflow-hidden" style={{ animationDelay: '80ms' }}>
-              <div className={`grid grid-cols-2 md:grid-cols-4 ${metricCols}`}>
-                {metrics.map((m) => <MetricCell key={m.label} {...m} onClick={m.live ? () => setGlobeOpen(true) : undefined} />)}
+            <section className="fade-up mb-4 grid gap-4 lg:grid-cols-[280px_1fr]" style={{ animationDelay: '80ms' }}>
+              <div className="card flex flex-col p-6">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">{periodTag}</p>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="head text-5xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
+                    <span key={hero?.value} className="num-roll">{hero?.value ?? '0'}</span>
+                  </span>
+                  {hero?.change !== undefined && hero?.change !== null && (
+                    <Delta change={hero.change} inverse={hero.inverse} />
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">visitors</p>
+                <div className="mt-6 grid flex-1 grid-cols-2 content-start gap-x-5 gap-y-4 border-t border-[var(--card-border)] pt-5">
+                  {chips.map((m) => <StatChip key={m.label} {...m} />)}
+                </div>
               </div>
-              <div className="h-64 p-4 pr-5 sm:h-72">
+
+              <div className="card p-4 sm:p-5">
+                <div className="h-72 lg:h-full lg:min-h-[22rem]">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
@@ -368,38 +397,39 @@ export default function Dashboard() {
                           {chartData.map((_, i) => <Cell key={i} fill="#ffa950" fillOpacity={activeIdx === null ? 0.9 : i === activeIdx ? 1 : 0.25} />)}
                         </Bar>
                       )}
-                      <Area yAxisId="v" type="monotone" dataKey="v" className="chart-glow" stroke="#3b82f6" strokeWidth={2.5} fill="url(#fillv)" isAnimationActive={false} fillOpacity={chartHover ? 0.5 : 1} activeDot={{ r: 5, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }} />
+                      <Area yAxisId="v" type="monotone" dataKey="v" stroke="#3b82f6" strokeWidth={2.5} fill="url(#fillv)" isAnimationActive={false} fillOpacity={chartHover ? 0.5 : 1} activeDot={{ r: 5, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-600">No data for this period yet.</div>
                 )}
+                </div>
               </div>
             </section>
 
             <section className="grid gap-4 md:grid-cols-2">
-              <div className="fade-up min-w-0" style={{ animationDelay: '160ms' }}>
-                <TabbedCard title="Sources" tabs={[
+              <div id="sources-panel" className="fade-up min-w-0 scroll-mt-6" style={{ animationDelay: '160ms' }}>
+                <TabbedCard title="Sources" icon={<SignalIcon />} tabs={[
                   { label: 'Channel', items: channelItems, donut: true },
                   { label: 'Referrer', items: referrerItems },
                   { label: 'Campaign', items: plainItems(data?.campaigns ?? [], ACCENT) },
-                  { label: 'Keyword', icon: <SearchIcon />, items: keywordItems, detail: keywordDetail, emptyNote: keywordNote },
+                  { label: 'Keyword', items: keywordItems, detail: keywordDetail, emptyNote: keywordNote },
                 ]} />
               </div>
               <div className="fade-up min-w-0" style={{ animationDelay: '220ms' }}>
-                <TabbedCard title="Top pages" metric="Views" tabs={[{ label: 'Top pages', items: plainItems(data?.pages ?? [], ACCENT) }]} />
+                <TabbedCard title="Top pages" icon={<FileIcon />} metric="Views" tabs={[{ label: 'Top pages', items: plainItems(data?.pages ?? [], ACCENT) }]} />
               </div>
               <div className="fade-up min-w-0" style={{ animationDelay: '280ms' }}>
-                <TabbedCard title="Technology" tabs={[
+                <TabbedCard title="Technology" icon={<ChipIcon />} tabs={[
                   { label: 'Browser', items: browserItems },
                   { label: 'OS', items: osItems },
                   { label: 'Device', items: deviceItems },
                 ]} />
               </div>
               <div className="fade-up min-w-0" style={{ animationDelay: '340ms' }}>
-                <TabbedCard title="Countries" tabs={[{ label: 'Countries', items: countryItems }]} />
+                <TabbedCard title="Countries" icon={<GlobeSmall />} tabs={[{ label: 'Countries', items: countryItems }]} />
               </div>
-              <div className="fade-up md:col-span-2" style={{ animationDelay: '400ms' }}><AiCard data={data} period={period} /></div>
+              <div id="ai-panel" className="fade-up scroll-mt-6 md:col-span-2" style={{ animationDelay: '400ms' }}><AiCard data={data} period={period} /></div>
             </section>
           </>
         )}
@@ -449,32 +479,27 @@ function ChartTooltip({ active, payload, label, currency, hasRevenue }: TooltipP
   );
 }
 
-function MetricCell({ label, value, live, change, inverse, revenue, onClick }: MetricDef & { onClick?: () => void }) {
-  const rose = change !== null && change !== undefined && (inverse ? change > 0 : change < 0);
-  const arrowUp = (change ?? 0) >= 0;
+function Delta({ change, inverse }: { change: number; inverse?: boolean }) {
+  const rose = inverse ? change > 0 : change < 0;
   return (
-    <div
-      onClick={onClick}
-      className={`group relative border-b border-r border-[var(--card-border)] px-4 py-4 ${onClick ? 'cursor-pointer transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]' : ''}`}
-    >
-      <div className="flex items-center gap-1.5">
-        <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</p>
-        {live && (
-          <span className="relative flex size-2 shrink-0">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-70" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.9)]" />
-          </span>
-        )}
-      </div>
-      <div className="mt-1.5 flex items-baseline gap-1.5">
-        <p className="head text-2xl font-bold tabular-nums text-zinc-900 sm:text-[1.75rem] dark:text-zinc-50">
+    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${rose ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
+      {change >= 0 ? '↑' : '↓'} {Math.abs(change)}%
+    </span>
+  );
+}
+
+// Compact metric chip in the hero column: label, value, delta, and the
+// revenue breakdown tooltip when Stripe data is attached.
+function StatChip({ label, value, change, inverse, revenue }: MetricDef) {
+  return (
+    <div className="group relative min-w-0">
+      <p className="truncate text-[11px] font-medium text-zinc-400 dark:text-zinc-500">{label}</p>
+      <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5">
+        <span className="head text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
           <span key={value} className="num-roll">{value}</span>
-        </p>
-        {change !== undefined && change !== null && (
-          <span className={`text-xs font-semibold ${rose ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{arrowUp ? '↑' : '↓'} {Math.abs(change)}%</span>
-        )}
+        </span>
+        {change !== undefined && change !== null && <Delta change={change} inverse={inverse} />}
       </div>
-      {onClick && <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">View on globe</p>}
       {revenue && <RevenueTip {...revenue} />}
     </div>
   );
@@ -483,7 +508,7 @@ function MetricCell({ label, value, live, change, inverse, revenue, onClick }: M
 // Revenue breakdown on hover: net total, new (gross) and refunds.
 function RevenueTip({ currency, total, gross, refunds }: RevenueBreakdown) {
   return (
-    <div className="pointer-events-none absolute left-4 top-full z-30 mt-1 hidden min-w-[11rem] rounded-xl border border-white/10 bg-zinc-900/95 p-3 text-xs shadow-2xl backdrop-blur group-hover:block">
+    <div className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden min-w-[11rem] rounded-xl border border-zinc-700 bg-zinc-900 p-3 text-xs shadow-2xl group-hover:block">
       <div className="mb-1.5 flex items-center justify-between gap-6 border-b border-white/10 pb-1.5">
         <span className="font-semibold text-zinc-300">Revenue</span>
         <span className="font-bold tabular-nums text-zinc-50">{fmtMoney(total, currency)}</span>
@@ -500,83 +525,97 @@ function RevenueTip({ currency, total, gross, refunds }: RevenueBreakdown) {
   );
 }
 
-function TabbedCard({ title, tabs, emptyNote, metric = 'Visitors' }: { title: string; tabs: Tab[]; emptyNote?: string; metric?: string }) {
+
+function TabbedCard({ title, icon, tabs, emptyNote, metric = 'Visitors' }: { title: string; icon?: ReactNode; tabs: Tab[]; emptyNote?: string; metric?: string }) {
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
   const idx = Math.min(active, tabs.length - 1);
   const tab = tabs[idx];
-  const max = tab.items[0]?.value ?? 1;
+  const total = tab.items.reduce((a, b) => a + b.value, 0);
   const shown = tab.items.slice(0, 10);
   const note = tab.emptyNote ?? emptyNote;
   const hasData = tab.detail ? tab.detail.rows.length > 0 : tab.items.length > 0;
   return (
     <div className="card flex h-full flex-col p-5">
-      <div className="flex items-center justify-between gap-3">
-        <SegTabs tabs={tabs} active={idx} onSelect={setActive} />
-        {!tab.donut && <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{metric}</span>}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {icon && <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#ffa950]/15 text-[#b06a1f] dark:bg-[#ffa950]/10 dark:text-[#ffa950]">{icon}</span>}
+          <div className="min-w-0">
+            <h3 className="head truncate text-sm font-bold text-zinc-900 dark:text-zinc-50">{title}</h3>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{metric.toLowerCase()}{tabs.length > 1 ? ` · by ${tab.label.toLowerCase()}` : ''}</p>
+          </div>
+        </div>
+        {hasData && (
+          <button onClick={() => setOpen(true)} aria-label={`${title} details`} title="Details" className="flex size-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100">
+            <ExpandIcon />
+          </button>
+        )}
       </div>
+
+      {tabs.length > 1 && (
+        <div className="mt-3 flex gap-4 overflow-x-auto border-b border-[var(--card-border)]">
+          {tabs.map((t, i) => (
+            <button
+              key={t.label}
+              onClick={() => setActive(i)}
+              className={`-mb-px shrink-0 border-b-2 pb-2 text-xs font-semibold transition-colors ${i === idx ? 'border-[#ffa950] text-zinc-900 dark:text-zinc-50' : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="mt-4 flex-1">
         {tab.donut && tab.items.length > 0 ? (
-          <Donut items={tab.items} />
+          <RaceBar items={tab.items} total={total} />
         ) : (
-          <div className="space-y-1">
-            {shown.map((it) => <BarRow key={it.key} left={it.left} value={it.value} max={max} color={it.color} />)}
+          <div>
+            {shown.map((it) => <TrackRow key={it.key} left={it.left} value={it.value} total={total} color={it.color} />)}
             {tab.items.length === 0 && <p className="px-2 py-8 text-center text-sm text-zinc-400 dark:text-zinc-600">{note ?? 'No data yet.'}</p>}
           </div>
         )}
       </div>
-      {hasData && (
-        <div className="mt-3 flex justify-center border-t border-[var(--card-border)] pt-3">
-          <button onClick={() => setOpen(true)} className="inline-flex select-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400 opacity-90 transition-colors hover:text-zinc-800 hover:opacity-100 dark:hover:text-zinc-100">
-            <ScanIcon /> Details
-          </button>
-        </div>
-      )}
       {open && <DetailsModal title={tabs.length > 1 ? `${title} · ${tab.label}` : title} tab={tab} metric={metric} onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
-function SegTabs({ tabs, active, onSelect }: { tabs: Tab[]; active: number; onSelect: (i: number) => void }) {
-  if (tabs.length <= 1) return <p className="head text-sm font-bold text-zinc-900 dark:text-zinc-50">{tabs[0]?.label}</p>;
+// One list row: label and value on top, a thin gradient progress track below.
+function TrackRow({ left, value, total, color }: { left: ReactNode; value: number; total: number; color: string }) {
+  const share = total > 0 ? Math.round((value / total) * 100) : 0;
+  const pct = Math.max(2, share);
   return (
-    <div className="inline-flex flex-wrap gap-0.5 self-start rounded-xl bg-black/[0.05] p-1 dark:bg-white/[0.06]">
-      {tabs.map((t, i) => (
-        <button
-          key={t.label}
-          onClick={() => onSelect(i)}
-          className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${i === active ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-black/5 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-white/10' : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-        >
-          {t.icon}{t.label}
-        </button>
-      ))}
+    <div className="py-[7px]">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="min-w-0 truncate text-zinc-700 dark:text-zinc-200">{left}</span>
+        <span className="shrink-0 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">
+          {fmt(value)} <span className="ml-0.5 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">{share}%</span>
+        </span>
+      </div>
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+        <span className="block h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 40%, transparent))` }} />
+      </div>
     </div>
   );
 }
 
-function Donut({ items }: { items: Item[] }) {
-  const total = items.reduce((a, b) => a + b.value, 0);
-  const data = items.map((it) => ({ name: it.key, value: it.value, color: it.color }));
+// Channel composition: one stacked bar with a legend, instead of a chart.
+function RaceBar({ items, total }: { items: Item[]; total: number }) {
   return (
-    <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-between">
-      <div className="relative size-40 shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" innerRadius="66%" outerRadius="100%" paddingAngle={2} stroke="none" isAnimationActive={false}>
-              {data.map((d) => <Cell key={d.name} fill={d.color} />)}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="head text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{fmt(total)}</span>
-          <span className="text-[11px] font-medium text-zinc-400">Visitors</span>
-        </div>
+    <div>
+      <div className="flex h-3 w-full gap-[3px] overflow-hidden rounded-full">
+        {items.map((it) => (
+          <span key={it.key} className="h-full rounded-full" style={{ width: `${total > 0 ? Math.max(1.5, (it.value / total) * 100) : 0}%`, background: it.color }} />
+        ))}
       </div>
-      <div className="w-full space-y-1.5">
+      <div className="mt-4 space-y-2.5">
         {items.map((it) => (
           <div key={it.key} className="flex items-center justify-between gap-3 text-sm">
             <span className="flex min-w-0 items-center gap-2 truncate text-zinc-700 dark:text-zinc-200">{it.left}</span>
-            <span className="shrink-0 tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(it.value)} <span className="text-zinc-400 dark:text-zinc-500">{total > 0 ? Math.round((it.value / total) * 100) : 0}%</span></span>
+            <span className="shrink-0 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">
+              {fmt(it.value)} <span className="ml-0.5 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">{total > 0 ? Math.round((it.value / total) * 100) : 0}%</span>
+            </span>
           </div>
         ))}
       </div>
@@ -602,7 +641,7 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-[var(--card-border)] bg-white/90 shadow-2xl backdrop-blur-2xl dark:bg-zinc-900/85" onClick={(e) => e.stopPropagation()}>
+      <div className="relative flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700/80 dark:bg-[#131318]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-4 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           {detail?.logo ?? <h3 className="head shrink-0 text-base font-bold text-zinc-900 dark:text-zinc-50">{title}</h3>}
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#ffa950] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
@@ -654,7 +693,6 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
   );
 }
 
-const ScanIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /></svg>;
 
 // AI/indexing card: a multi-line chart of crawls, and clicking a bot
 // (ChatGPT, Googlebot, Bing...) shows the pages it crawled. No Details button.
@@ -702,19 +740,31 @@ function AiCard({ data, period }: { data: Stats | null; period: Period }) {
   return (
     <div className="card p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap gap-0.5 rounded-xl bg-black/[0.05] p-1 dark:bg-white/[0.06]">
-          {tabs.map((t) => (
-            <button key={t.key} onClick={() => { setTab(t.key); setSel(null); }} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${tab === t.key ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-black/5 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-white/10' : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100'}`}>
-              {t.icon}{t.label}<span className="tabular-nums text-zinc-400">{fmt(countOf(t.key))}</span>
-            </button>
-          ))}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#ffa950]/15 text-[#b06a1f] dark:bg-[#ffa950]/10 dark:text-[#ffa950]"><BotIcon /></span>
+          <div className="min-w-0">
+            <h3 className="head truncate text-sm font-bold text-zinc-900 dark:text-zinc-50">AI &amp; crawlers</h3>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">crawls · last {windowDays} days</p>
+          </div>
         </div>
         {!selected && (
           <div className="relative">
             <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400"><SearchIcon /></span>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search crawlers" className="w-40 rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-3 text-xs text-zinc-800 outline-none focus:border-[#ffa950] sm:w-52 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search crawlers" className="w-40 rounded-lg border border-[var(--card-border)] bg-transparent py-1.5 pl-8 pr-3 text-xs text-zinc-800 outline-none focus:border-[#ffa950] sm:w-52 dark:text-zinc-100" />
           </div>
         )}
+      </div>
+
+      <div className="mt-3 flex gap-4 overflow-x-auto border-b border-[var(--card-border)]">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key); setSel(null); }}
+            className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 pb-2 text-xs font-semibold transition-colors ${tab === t.key ? 'border-[#ffa950] text-zinc-900 dark:text-zinc-50' : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'}`}
+          >
+            {t.label}<span className="tabular-nums text-zinc-400 dark:text-zinc-500">{fmt(countOf(t.key))}</span>
+          </button>
+        ))}
       </div>
 
       <div className="mt-4 grid items-stretch gap-5 md:grid-cols-[1.6fr_1fr]">
@@ -813,17 +863,6 @@ function AiBotPanel({ bot, windowDays, onClose }: { bot: AiBot; windowDays: numb
   );
 }
 
-function BarRow({ left, value, max, color }: { left: ReactNode; value: number; max: number; color: string }) {
-  const pct = Math.max(2, Math.round((value / Math.max(1, max)) * 100));
-  return (
-    <div className="relative flex items-center justify-between gap-3 overflow-hidden rounded-lg px-2 py-1.5 text-sm">
-      <span className="absolute inset-y-0 left-0 rounded-lg opacity-[0.16]" style={{ width: `${pct}%`, background: color }} />
-      <span className="relative z-10 min-w-0 truncate text-zinc-700 dark:text-zinc-200">{left}</span>
-      <span className="relative z-10 shrink-0 tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(value)}</span>
-    </div>
-  );
-}
-
 function MenuItem({ children, onClick, danger, icon }: { children: ReactNode; onClick: () => void; danger?: boolean; icon?: ReactNode }) {
   return (
     <button onClick={onClick} className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 ${danger ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-700 dark:text-zinc-200'}`}>
@@ -838,6 +877,10 @@ const LinkIcon = () => <Ico><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07
 const TrashIcon = () => <Ico><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></Ico>;
 const StripeIcon = () => <img src="https://cdn.simpleicons.org/stripe/635BFF" alt="" width={16} height={16} className="size-4" onError={hideBroken} />;
 const GaIcon = () => <img src="https://cdn.simpleicons.org/googleanalytics/E37400" alt="" width={16} height={16} className="size-4" onError={hideBroken} />;
+const SignalIcon = () => <Ico><path d="M2 20h.01" /><path d="M7 20v-4" /><path d="M12 20v-8" /><path d="M17 20V8" /><path d="M22 4v16" /></Ico>;
+const FileIcon = () => <Ico><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /></Ico>;
+const ChipIcon = () => <Ico><rect width="16" height="16" x="4" y="4" rx="2" /><rect width="6" height="6" x="9" y="9" rx="1" /><path d="M15 2v2" /><path d="M15 20v2" /><path d="M2 15h2" /><path d="M2 9h2" /><path d="M20 15h2" /><path d="M20 9h2" /><path d="M9 2v2" /><path d="M9 20v2" /></Ico>;
+const ExpandIcon = () => <Ico><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></Ico>;
 
 function PlusIcon() {
   return <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>;
@@ -848,7 +891,7 @@ function DotsIcon() {
 
 function Onboarding({ onAdd }: { onAdd: () => void }) {
   return (
-    <div className="mt-16 flex flex-col items-center rounded-2xl border border-dashed border-zinc-300 bg-white/50 px-6 py-16 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
+    <div className="card mt-16 flex flex-col items-center border-dashed px-6 py-16 text-center">
       <h2 className="head text-xl font-bold text-zinc-900 dark:text-zinc-50">No site yet</h2>
       <p className="mt-1.5 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">Add your first site to get a tracking script and start seeing live visitors.</p>
       <button onClick={onAdd} className="btn-primary mt-5"><PlusIcon /> Add your first site</button>
@@ -859,7 +902,7 @@ function Onboarding({ onAdd }: { onAdd: () => void }) {
 function Overlay({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--card-border)] bg-white/90 p-6 shadow-2xl backdrop-blur-2xl dark:bg-zinc-900/85" onClick={(e) => e.stopPropagation()}>
+      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-700/80 dark:bg-[#131318]" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close" className="absolute right-3.5 top-3.5 flex size-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
           <CloseIcon />
         </button>
@@ -917,7 +960,7 @@ function Menu({ button, buttonClass, align = 'left', children }: { button: React
     <div ref={ref} className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)} className={buttonClass}>{button}</button>
       {open && (
-        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} z-30 mt-1 max-h-72 min-w-[13rem] overflow-y-auto rounded-xl border border-[var(--card-border)] bg-white/85 p-1 shadow-xl backdrop-blur-xl dark:bg-zinc-900/85`}>
+        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} z-30 mt-1.5 max-h-72 min-w-[13rem] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.35)] dark:border-zinc-700/80 dark:bg-[#131318]`}>
           {children(() => setOpen(false))}
         </div>
       )}
