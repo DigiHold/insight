@@ -1698,8 +1698,8 @@ function AddSiteModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         }}
         className="space-y-3"
       >
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Site name (e.g. Amabrik)" className="field" />
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Website URL (e.g. https://amabrik.com)" className="field" />
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Site name (e.g. My Website)" className="field" />
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Website URL (e.g. https://website.com)" className="field" />
         <p className="text-xs text-zinc-500 dark:text-zinc-400">The URL is used for the site favicon and for Search Console keywords.</p>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">Cancel</button>
@@ -1738,7 +1738,7 @@ function UrlModal({ site, onClose, onDone }: { site: SiteItem; onClose: () => vo
         }}
         className="space-y-4"
       >
-        <input autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://amabrik.com" className="field" />
+        <input autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://website.com" className="field" />
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">Cancel</button>
           <button disabled={busy} className="btn-primary">{busy ? 'Saving…' : 'Save'}</button>
