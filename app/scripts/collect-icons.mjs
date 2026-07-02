@@ -12,15 +12,16 @@ const outFlags = path.join(root, 'public', 'flags');
 await mkdir(outI, { recursive: true });
 await mkdir(outFlags, { recursive: true });
 
-// local name -> simple-icons export (siPascal)
+// local name -> simple-icons export (siPascal). Only brands that are officially
+// monochrome (or niche) come from simple-icons; the full-color logos (browsers,
+// Google, Gemini, Meta, Instagram, TikTok, YouTube, Reddit, Facebook, LinkedIn,
+// DuckDuckGo, Claude, Analytics) are official colored SVGs committed directly
+// from browser-logos and svgl, so this script does not touch them.
 const MAP = {
-  google: 'siGoogle', openai: 'siOpenai', anthropic: 'siAnthropic', perplexity: 'siPerplexity',
-  x: 'siX', amazon: 'siAmazon', apple: 'siApple', meta: 'siMeta', gemini: 'siGooglegemini',
-  chrome: 'siGooglechrome', firefox: 'siFirefoxbrowser', safari: 'siSafari', opera: 'siOpera',
-  brave: 'siBrave', samsung: 'siSamsung', android: 'siAndroid', linux: 'siLinux', ubuntu: 'siUbuntu',
-  stripe: 'siStripe', googleanalytics: 'siGoogleanalytics', linkedin: 'siLinkedin', facebook: 'siFacebook',
-  reddit: 'siReddit', instagram: 'siInstagram', youtube: 'siYoutube', tiktok: 'siTiktok', threads: 'siThreads',
-  duckduckgo: 'siDuckduckgo', claude: 'siClaude', bytedance: 'siBytedance', ecosia: 'siEcosia', qwant: 'siQwant',
+  openai: 'siOpenai', anthropic: 'siAnthropic', perplexity: 'siPerplexity', x: 'siX',
+  amazon: 'siAmazon', apple: 'siApple', threads: 'siThreads', stripe: 'siStripe',
+  android: 'siAndroid', linux: 'siLinux', ubuntu: 'siUbuntu', bytedance: 'siBytedance',
+  ecosia: 'siEcosia', qwant: 'siQwant',
 };
 
 const svg = (hex, pathD) =>
