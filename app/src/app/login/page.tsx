@@ -64,10 +64,10 @@ export default function Login() {
             <rect x="14" y="12" width="4" height="13" rx="2" fill="#fff" fillOpacity={0.7} />
             <rect x="20" y="7" width="4" height="18" rx="2" fill="#fff" />
           </svg>
-          <div className="flex flex-col leading-tight">
+          <div className="flex flex-col leading-none">
             <span className="head text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Insight</span>
-            <span className="text-xs text-zinc-400 dark:text-zinc-500">
-              by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-500 underline-offset-2 hover:text-[#ffa950] hover:underline dark:text-zinc-400">Nicolas Lecocq</a>
+            <span className="mt-1 self-end text-[9px] font-medium tracking-wide text-zinc-400 dark:text-zinc-500">
+              by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 transition-colors hover:text-[#ffa950] dark:text-zinc-400">Nicolas Lecocq</a>
             </span>
           </div>
         </div>
