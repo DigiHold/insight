@@ -1,44 +1,71 @@
 # Insight
 
-A private, personal analytics tool for all of Nicolas's sites (Amabrik, LinkedGrow, DigiHold, nicolas-lecocq, and future ones).
-Real time, clear, richer than GA4, self-hosted on a Contabo VPS. No caps, fixed price.
+Self-hosted, privacy-first web analytics you run on your own VPS. It gives you the real-time visitor map and the clean dashboard of a commercial analytics tool, plus revenue, AI-crawler tracking, funnels and retention, without cookies, without a consent banner, and without sending a single byte to a third party.
 
-The full spec (data, schema, sources, AI detection, deployment) lives in **[docs/data.md](docs/data.md)**. Read it before writing any code.
+Everything lives on your server: a Next.js app, a ClickHouse database for events, and a small SQLite file for configuration. You own the data.
+
+## What it tracks
+
+**Audience**
+- Real-time visitors on an interactive 3D globe, with per-visitor detail (country, device, browser, current page, session time). Presence is engagement-based, so a visitor who leaves drops off in about a minute, the same way GA4 behaves.
+- Visitors, page views, bounce rate and average engaged time, each with the change against the previous period.
+- New vs returning visitors.
+- A live feed of pageviews as they happen.
+
+**Acquisition**
+- Channels (search, social, AI, referral, direct), referrers, and campaigns.
+- Full UTM breakdown: source, medium, campaign, term, content.
+- Search Console keywords with position, impressions, clicks and CTR when Google Search Console is connected.
+
+**Content**
+- Top pages, landing pages, exit pages, and outbound link clicks.
+
+**Locations**
+- Countries, regions, cities and visitor languages.
+
+**Revenue**
+- Stripe revenue over any period, net of refunds, with new vs refunded amounts and daily bars on the chart.
+- Conversion rate and revenue per visitor.
+- Revenue attribution: which traffic source and which campaign actually bring the money, using your own purchase events.
+
+**Behavior**
+- Funnels of 2 to 4 pages with the pass-through rate at each step.
+- Weekly retention cohorts.
+- A busy-hours heatmap (day of week against hour) so you know when your audience is around.
+
+**AI and indexing crawlers**
+- Which AI and search bots fetch your pages (ChatGPT, Google, Bing, Gemini, Amazon, Anthropic, Meta and more), split into AI answers, indexing and training, with the exact pages each one crawled. Detection is server-side, so it works even though bots never run JavaScript.
+
+**Everything else**
+- Any period: today, 7, 30 or 90 days, or a custom date range with a real calendar.
+- Dated notes on the chart to explain traffic spikes.
+- Light and dark themes that follow the system.
+
+## Privacy
+
+Insight is cookieless and needs no consent banner. Visitors are counted with a salted hash and never with a stored raw IP address. Nothing leaves your server. Data-center traffic and known bots are filtered out, so a visitor count means real people.
+
+## How it works
+
+The tracking script is a single line in your site's `<head>`. It sends pageviews and a light heartbeat to `/api/collect` on your own domain. Events go into ClickHouse. The dashboard reads from ClickHouse in real time for today, and reads Google Analytics live for the 7, 30 and 90 day periods when GA4 is connected, so the numbers match GA4 exactly. Stripe revenue is pulled with a read-only key.
 
 ## Stack
 
-- Next.js 15 + TypeScript strict + Tailwind v4 (dashboard and collector)
-- ClickHouse (events, self-hosted, no cap)
-- SQLite (config: admin account, sites, 2FA)
-- Docker Compose, listens only on 127.0.0.1:8787
-- Auth.js + TOTP 2FA, noindex + robots.txt (strictly private)
+- Next.js 15 (App Router, standalone) and React 19, TypeScript, Tailwind CSS v4.
+- ClickHouse for events, SQLite for configuration.
+- Mapbox GL for the globe, Recharts for charts.
+- Runs as two containers with Docker Compose. An optional GitHub Actions workflow builds the image and deploys over SSH on every push.
 
-> The Contabo VPS already hosts the DigiHold sites. Insight is isolated: its own network and volumes,
-> no port 80/443, and the existing reverse proxy serves the subdomain. See [docs/deploy-vps.md](docs/deploy-vps.md).
+## Quick start
 
-## Build status
+1. Get a VPS from any provider. On a fresh Ubuntu box, `scripts/provision.sh` installs Docker, a firewall and automatic security updates.
+2. Clone this repo into `/opt/insight`, copy `.env.example` to `.env`, and fill in the values.
+3. Run `docker compose up -d`.
+4. Point a subdomain at `127.0.0.1:8787` through your existing reverse proxy or panel, with HTTPS.
+5. Open the dashboard, add your site, and paste the one-line script into your site's `<head>`.
 
-- [x] Infra: docker-compose, Caddyfile, ClickHouse schema, `t.js` tracker, scripts
-- [ ] Phase 1: Next.js app (collector `/api/collect` + `/api/ai-hit`)
-- [ ] Phase 2: source classification + GeoIP + UA parsing
-- [ ] Phase 3: AI bot detection (UA + IP verification)
-- [ ] Phase 4: real-time dashboard
-- [ ] Phase 5: auth + 2FA + noindex
-- [ ] Phase 6: Contabo deployment + backups
-- [ ] Phase 7: install the tracker on the 4 sites
+The full guide is in [docs/setup.md](docs/setup.md). It covers connecting GA4, Search Console and Stripe, enabling revenue events and funnels, and how the one-click Google connection works.
 
-## Local start
+## License
 
-```bash
-cp .env.example .env      # fill in the secrets
-docker compose up -d clickhouse   # just the database until the app is scaffolded
-```
-
-## Deployment (VPS)
-
-Runs automatically on every push to `main` via GitHub Actions (`.github/workflows/deploy.yml`).
-Secrets to set in the GitHub repo: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
-
-## Backups
-
-`scripts/backup.sh` runs in cron at 3 a.m.: ClickHouse dump (Native) + SQLite, with 7-day rotation.
+Personal project, provided as-is. Use it, fork it, run it on your own infrastructure.

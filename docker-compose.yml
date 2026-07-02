@@ -21,9 +21,6 @@ services:
       - AUTH_SECRET=${AUTH_SECRET}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - GEO_MODE=${GEO_MODE}
-      - MAXMIND_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID}
-      - MAXMIND_LICENSE_KEY=${MAXMIND_LICENSE_KEY}
       - MAPBOX_TOKEN=${MAPBOX_TOKEN}
     volumes:
       - app_data:/data
