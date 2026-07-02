@@ -484,13 +484,13 @@ export default function Dashboard() {
   );
 
   return (
-    <div>
+    <div className="flex min-h-[100svh] flex-col">
       {loading && (
         <div className="pointer-events-none fixed inset-x-0 top-0 z-[70] h-0.5 overflow-hidden">
           <div className="load-bar h-full w-1/3 rounded-full bg-[#ffa950]" />
         </div>
       )}
-      <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-5 sm:px-6">
           <header className="fade-up relative z-40 mb-6">
             {/* Mobile: three stacked rows — identity, site tools, period. */}
             <div className="flex flex-col gap-2.5 md:hidden">
@@ -674,9 +674,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        <footer className="mt-10 flex flex-col items-center gap-1 text-center text-xs text-zinc-400 dark:text-zinc-600">
+        <footer className="mt-auto flex flex-col items-center gap-0.5 pt-10 text-center text-xs text-zinc-400 dark:text-zinc-600">
           <span>Insight, private real-time analytics. Updates every 5 seconds.</span>
-          <span>by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-500 underline-offset-2 transition-colors hover:text-[#ffa950] hover:underline dark:text-zinc-400">Nicolas Lecocq</a></span>
+          <span className="font-[family-name:var(--font-sign)] text-base italic">by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 underline-offset-2 transition-colors hover:text-[#ffa950] hover:underline dark:text-zinc-400">Nicolas&nbsp;Lecocq</a></span>
         </footer>
       </div>
 

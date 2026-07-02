@@ -42,11 +42,12 @@ body {
   background: var(--page-bg);
   color: #18181b;
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
-  /* dvh, not vh: on iOS Safari 100vh is the toolbar-hidden height, so a short
+  /* svh, not vh: on iOS Safari 100vh is the toolbar-hidden height, so a short
      page pads out past the visible screen and leaves a huge blank gap below.
-     100dvh tracks the live viewport and removes that overshoot. */
+     100svh is the smallest (toolbar-shown) viewport, so it can never overshoot
+     the visible area whatever the toolbar is doing. */
   min-height: 100vh;
-  min-height: 100dvh;
+  min-height: 100svh;
 }
 
 @media (prefers-color-scheme: dark) {
