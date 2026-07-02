@@ -32,6 +32,12 @@ html {
   color-scheme: light dark;
 }
 
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 body {
   background: var(--page-bg);
   color: #18181b;

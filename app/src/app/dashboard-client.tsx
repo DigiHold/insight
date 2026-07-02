@@ -430,8 +430,8 @@ export default function Dashboard() {
           <Onboarding onAdd={() => setModal({ type: 'add' })} />
         ) : (
           <div className={`transition-opacity duration-300 ${loading ? 'pointer-events-none opacity-50' : ''}`}>
-            <section className="fade-up mb-4 grid gap-4 lg:grid-cols-[280px_1fr]" style={{ animationDelay: '80ms' }}>
-              <div className="card relative z-10 flex flex-col p-6">
+            <section className="fade-up mb-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]" style={{ animationDelay: '80ms' }}>
+              <div className="card relative z-10 flex min-w-0 flex-col p-6">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">{periodTag}</p>
                 <div className="mt-2 flex items-baseline gap-2">
                   <span className="head text-5xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -450,9 +450,9 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <div className="card p-4 sm:p-5">
+              <div className="card min-w-0 p-4 sm:p-5">
                 <button onClick={() => setNoteOpen(true)} title="Add a note on the chart" className="absolute right-3 top-3 z-10 rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100">+ Note</button>
-                <div className="h-72 lg:h-full lg:min-h-[22rem]">
+                <div className="h-72 w-full lg:h-full lg:min-h-[22rem]">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
@@ -533,8 +533,8 @@ export default function Dashboard() {
               <div className="fade-up min-w-0" style={{ animationDelay: '400ms' }}><HeatmapCard cells={data?.heatmap ?? []} /></div>
               <div className="fade-up min-w-0" style={{ animationDelay: '420ms' }}><FunnelCard siteId={siteId} funnel={data?.funnel ?? null} onSaved={() => loadStats(siteId)} /></div>
               <div className="fade-up min-w-0" style={{ animationDelay: '440ms' }}><RetentionCard rows={data?.retention ?? []} /></div>
-              <div className="fade-up md:col-span-2" style={{ animationDelay: '460ms' }}><RevenueAttribCard data={data?.revAttrib} currency={currency} siteId={siteId} /></div>
-              <div id="ai-panel" className="fade-up scroll-mt-6 md:col-span-2" style={{ animationDelay: '480ms' }}><AiCard data={data} period={period} /></div>
+              <div className="fade-up min-w-0 md:col-span-2" style={{ animationDelay: '460ms' }}><RevenueAttribCard data={data?.revAttrib} currency={currency} siteId={siteId} /></div>
+              <div id="ai-panel" className="fade-up min-w-0 scroll-mt-6 md:col-span-2" style={{ animationDelay: '480ms' }}><AiCard data={data} period={period} /></div>
             </section>
           </div>
         )}
@@ -1150,10 +1150,10 @@ function AiCard({ data, period }: { data: Stats | null; period: Period }) {
         ))}
       </div>
 
-      <div className="mt-4 grid items-stretch gap-5 md:grid-cols-[1.6fr_1fr]">
+      <div className="mt-4 grid items-stretch gap-5 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col">
           {lineKeys.length > 0 ? (
-            <div className="h-72 flex-1">
+            <div className="h-72 w-full flex-1">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={series} margin={{ top: 6, right: 8, left: 4, bottom: 0 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(130,130,140,.2)" />
