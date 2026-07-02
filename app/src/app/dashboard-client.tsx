@@ -1181,7 +1181,7 @@ function AiCard({ data, period }: { data: Stats | null; period: Period }) {
       <div className="mt-4 grid items-stretch gap-5 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col">
           {lineKeys.length > 0 ? (
-            <div className="h-72 w-full flex-1">
+            <div className="h-64 w-full sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={series} margin={{ top: 6, right: 8, left: 4, bottom: 0 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(130,130,140,.2)" />
