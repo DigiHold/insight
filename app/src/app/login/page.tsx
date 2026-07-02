@@ -66,7 +66,7 @@ export default function Login() {
           </svg>
           <div className="flex flex-col leading-none">
             <span className="head text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Insight</span>
-            <span className="-mt-1 ml-[1.65rem] font-[family-name:var(--font-sign)] text-sm italic leading-none text-zinc-400 dark:text-zinc-500">
+            <span className="-mt-1 ml-[0.5rem] font-[family-name:var(--font-sign)] text-sm italic leading-none text-zinc-400 dark:text-zinc-500">
               by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 transition-colors hover:text-[#ffa950] dark:text-zinc-400">Nicolas&nbsp;Lecocq</a>
             </span>
           </div>
