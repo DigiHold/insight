@@ -57,6 +57,7 @@ const CHANNEL_LABEL: Record<string, string> = { search: 'Organic search', social
 const VENDOR_ICON: Record<string, string> = {
   openai: 'openai', anthropic: 'anthropic', perplexity: 'perplexity', google: 'google', gemini: 'gemini',
   xai: 'x', bytedance: 'bytedance', amazon: 'amazon', apple: 'apple', meta: 'meta', duckduckgo: 'duckduckgo',
+  microsoft: 'bing', cohere: 'cohere', commoncrawl: 'commoncrawl', timpi: 'timpi', you: 'you',
 };
 // Known referrer hostnames -> local official SVG. Unknown hosts use the proxy.
 const DOMAIN_ICON: Record<string, string> = {
@@ -74,6 +75,9 @@ const DOMAIN_ICON: Record<string, string> = {
   'perplexity.ai': 'perplexity', 'www.perplexity.ai': 'perplexity',
   'claude.ai': 'anthropic', 'anthropic.com': 'anthropic', 'gemini.google.com': 'gemini',
   'amazon.com': 'amazon', 'apple.com': 'apple', 'meta.com': 'meta',
+  'bing.com': 'bing', 'www.bing.com': 'bing', 'cn.bing.com': 'bing',
+  'yahoo.com': 'yahoo', 'www.yahoo.com': 'yahoo', 'search.yahoo.com': 'yahoo', 'r.search.yahoo.com': 'yahoo',
+  'copilot.microsoft.com': 'copilot', 'you.com': 'you',
 };
 // Pale background per vendor for the crawler icon square (each brand has its own tint).
 const VENDOR_TINT: Record<string, string> = {
@@ -1237,7 +1241,7 @@ function BotBadge({ vendor, size = 'md' }: { vendor: string; size?: 'md' | 'sm' 
   const img = size === 'sm' ? 14 : 16;
   return (
     <span className={`flex ${box} shrink-0 items-center justify-center rounded-md ${vendorTint(vendor)}`}>
-      <BrandSvg name={VENDOR_ICON[vendor] ?? ''} size={img} className="" />
+      <BrandSvg name={VENDOR_ICON[vendor] ?? ''} size={img} className="object-contain" />
     </span>
   );
 }
@@ -1439,7 +1443,7 @@ function CheckMark() {
 
 // Official brand SVG served locally from /public/i, with a neutral-globe
 // fallback for brands not yet bundled.
-function BrandSvg({ name, size = 16, className = 'size-4 shrink-0' }: { name: string; size?: number; className?: string }) {
+function BrandSvg({ name, size = 16, className = 'size-4 shrink-0 object-contain' }: { name: string; size?: number; className?: string }) {
   const [broken, setBroken] = useState(false);
   if (!name || broken) return <GlobeSmall />;
   return <img src={`/i/${name}.svg`} alt="" width={size} height={size} style={{ width: size, height: size }} className={className} onError={() => setBroken(true)} />;
