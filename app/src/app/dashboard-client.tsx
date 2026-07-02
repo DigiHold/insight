@@ -450,9 +450,11 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <div className="card min-w-0 p-4 sm:p-5">
-                <button onClick={() => setNoteOpen(true)} title="Add a note on the chart" className="absolute right-3 top-3 z-10 rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100">+ Note</button>
-                <div className="h-72 w-full lg:h-full lg:min-h-[22rem]">
+              <div className="card flex min-w-0 flex-col p-2.5 sm:p-5">
+                <div className="mb-1 flex justify-end">
+                  <button onClick={() => setNoteOpen(true)} title="Add a note on the chart" className="rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100">+ Note</button>
+                </div>
+                <div className="h-72 w-full flex-1 lg:min-h-[20rem]">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
