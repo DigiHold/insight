@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode, type Syntheti
 import { createPortal } from 'react-dom';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
 import dynamic from 'next/dynamic';
+import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const GlobeModal = dynamic(() => import('./globe'), { ssr: false });
 
@@ -204,6 +207,60 @@ type Period = 'today' | '7d' | '30d' | '90d' | 'custom';
 
 const PERIODS: Period[] = ['today', '7d', '30d', '90d', 'custom'];
 
+// Customizable dashboard cards (order + hide are saved locally). Two-column
+// cards (revenue, ai) span the full width. The KPI/chart hero stays fixed.
+type CardId = 'sources' | 'pages' | 'technology' | 'locations' | 'feed' | 'heatmap' | 'funnel' | 'retention' | 'revenue' | 'ai';
+const DEFAULT_CARDS: CardId[] = ['sources', 'pages', 'technology', 'locations', 'feed', 'heatmap', 'funnel', 'retention', 'revenue', 'ai'];
+const WIDE_CARDS = new Set<CardId>(['revenue', 'ai']);
+const CARD_LABEL: Record<CardId, string> = {
+  sources: 'Sources', pages: 'Pages', technology: 'Technology', locations: 'Locations',
+  feed: 'Live feed', heatmap: 'Busy hours', funnel: 'Funnel', retention: 'Retention',
+  revenue: 'Revenue attribution', ai: 'AI & crawlers',
+};
+const readIds = (key: string, fallback: CardId[]): CardId[] => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) ?? '[]') as CardId[];
+    const known = saved.filter((id) => (DEFAULT_CARDS as string[]).includes(id));
+    // Append any card added in a newer version so it is never lost.
+    return key.includes('order') ? [...known, ...DEFAULT_CARDS.filter((id) => !known.includes(id))] : known;
+  } catch {
+    return fallback;
+  }
+};
+
+// A dashboard card wrapped for drag-and-drop. In edit mode the whole card is a
+// drag handle, its content is inert, and a hide button appears.
+function SortableCard({ id, wide, edit, onHide, children }: { id: CardId; wide: boolean; edit: boolean; onHide: () => void; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !edit });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`relative min-w-0 ${wide ? 'md:col-span-2' : ''} ${isDragging ? 'z-30 opacity-90' : ''} ${edit ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      {...(edit ? { ...attributes, ...listeners } : {})}
+    >
+      {edit && (
+        <>
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-[1.25rem] ring-2 ring-dashed ring-[#ffa950]/50" />
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={onHide}
+            aria-label={`Hide ${CARD_LABEL[id]}`}
+            className="absolute -right-2 -top-2 z-20 flex size-7 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg transition-transform hover:scale-110"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M4 8h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          </button>
+        </>
+      )}
+      <div className={edit ? 'jiggle pointer-events-none select-none' : ''}>{children}</div>
+    </div>
+  );
+}
+
+const GripIcon = () => <Ico><circle cx="9" cy="6" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="9" cy="18" r="1" /><circle cx="15" cy="6" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="18" r="1" /></Ico>;
+
 export default function Dashboard() {
   const [sites, setSites] = useState<SiteItem[]>([]);
   const [siteId, setSiteId] = useState<string>(() => (typeof window !== 'undefined' ? localStorage.getItem('insight_site') ?? '' : ''));
@@ -235,6 +292,26 @@ export default function Dashboard() {
       .then((r) => r.json()).then((j) => setNotes(j.notes ?? [])).catch(() => setNotes([]));
   }, [siteId]);
   useEffect(() => { loadNotes(); }, [loadNotes]);
+
+  // Dashboard customization: card order + hidden set, edit mode, drag sensors.
+  const [editCards, setEditCards] = useState(false);
+  const [cardOrder, setCardOrder] = useState<CardId[]>(() => readIds('insight_card_order', DEFAULT_CARDS));
+  const [hiddenCards, setHiddenCards] = useState<CardId[]>(() => readIds('insight_card_hidden', []));
+  useEffect(() => { localStorage.setItem('insight_card_order', JSON.stringify(cardOrder)); }, [cardOrder]);
+  useEffect(() => { localStorage.setItem('insight_card_hidden', JSON.stringify(hiddenCards)); }, [hiddenCards]);
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+  );
+  const onCardDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (over && active.id !== over.id) {
+      setCardOrder((o) => arrayMove(o, o.indexOf(active.id as CardId), o.indexOf(over.id as CardId)));
+    }
+  };
+  const hideCard = (id: CardId) => setHiddenCards((h) => (h.includes(id) ? h : [...h, id]));
+  const showCard = (id: CardId) => setHiddenCards((h) => h.filter((x) => x !== id));
+  const resetCards = () => { setCardOrder(DEFAULT_CARDS); setHiddenCards([]); };
 
   useEffect(() => { if (siteId) localStorage.setItem('insight_site', siteId); }, [siteId]);
   useEffect(() => { localStorage.setItem('insight_period', period); }, [period]);
@@ -350,6 +427,7 @@ export default function Dashboard() {
     <Menu align="right" buttonClass="flex size-9 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-700 dark:hover:bg-white/[0.07] dark:hover:text-zinc-200" button={<DotsIcon />}>
       {(close) => (
         <>
+          <MenuItem icon={<GripIcon />} onClick={() => { setEditCards(true); close(); }}>Customize dashboard</MenuItem>
           <MenuItem icon={<CodeIcon />} onClick={() => { setModal({ type: 'script', site }); close(); }}>Show tracking script</MenuItem>
           <MenuItem icon={<LinkIcon />} onClick={() => { setModal({ type: 'url', site }); close(); }}>Set website URL</MenuItem>
           {site.stripe
@@ -519,9 +597,9 @@ export default function Dashboard() {
               </div>
             </section>
 
-            <section className="grid gap-4 md:grid-cols-2">
-              <div id="sources-panel" className="fade-up min-w-0 scroll-mt-6" style={{ animationDelay: '160ms' }}>
-                <TabbedCard title="Sources" icon={<SignalIcon />} tabs={[
+            {(() => {
+              const cardNode: Record<CardId, ReactNode> = {
+                sources: <TabbedCard title="Sources" icon={<SignalIcon />} tabs={[
                   { label: 'Channel', items: channelItems, donut: true },
                   { label: 'Referrer', items: referrerItems },
                   { label: 'Campaign', items: plainItems(data?.campaigns ?? [], ACCENT) },
@@ -529,38 +607,70 @@ export default function Dashboard() {
                   { label: 'Term', items: plainItems(data?.utmTerm ?? [], ACCENT), emptyNote: 'No utm_term tags in this period.' },
                   { label: 'Content', items: plainItems(data?.utmContent ?? [], ACCENT), emptyNote: 'No utm_content tags in this period.' },
                   { label: 'Keyword', items: keywordItems, detail: keywordDetail, emptyNote: keywordNote },
-                ]} />
-              </div>
-              <div className="fade-up min-w-0" style={{ animationDelay: '220ms' }}>
-                <TabbedCard title="Pages" icon={<FileIcon />} metric="Views" tabs={[
+                ]} />,
+                pages: <TabbedCard title="Pages" icon={<FileIcon />} metric="Views" tabs={[
                   { label: 'Top pages', items: plainItems(data?.pages ?? [], ACCENT) },
                   { label: 'Landing', metric: 'Visitors', items: plainItems(data?.landing ?? [], '#10b981'), emptyNote: 'First page of each visit shows here.' },
                   { label: 'Exit', metric: 'Visitors', items: plainItems(data?.exits ?? [], '#f43f5e'), emptyNote: 'Last page of each visit shows here.' },
                   { label: 'Outbound', metric: 'Clicks', items: plainItems(data?.outbound ?? [], '#3b82f6', (u) => u.replace(/^https?:\/\//, '')), emptyNote: 'Clicks to external links show here.' },
-                ]} />
-              </div>
-              <div className="fade-up min-w-0" style={{ animationDelay: '280ms' }}>
-                <TabbedCard title="Technology" icon={<ChipIcon />} tabs={[
+                ]} />,
+                technology: <TabbedCard title="Technology" icon={<ChipIcon />} tabs={[
                   { label: 'Browser', items: browserItems },
                   { label: 'OS', items: osItems },
                   { label: 'Device', items: deviceItems },
-                ]} />
-              </div>
-              <div className="fade-up min-w-0" style={{ animationDelay: '340ms' }}>
-                <TabbedCard title="Locations" icon={<GlobeSmall />} tabs={[
+                ]} />,
+                locations: <TabbedCard title="Locations" icon={<GlobeSmall />} tabs={[
                   { label: 'Countries', items: countryItems },
                   { label: 'Regions', items: plainItems(data?.regions ?? [], '#10b981'), emptyNote: 'Needs GA4, or the Cloudflare "visitor location headers" transform.' },
                   { label: 'Cities', items: plainItems(data?.cities ?? [], '#10b981'), emptyNote: 'Needs GA4, or the Cloudflare "visitor location headers" transform.' },
                   { label: 'Languages', items: plainItems(data?.languages ?? [], '#a855f7', langLabel) },
-                ]} />
-              </div>
-              <div className="fade-up min-w-0" style={{ animationDelay: '380ms' }}><FeedCard siteId={siteId} /></div>
-              <div className="fade-up min-w-0" style={{ animationDelay: '400ms' }}><HeatmapCard cells={data?.heatmap ?? []} /></div>
-              <div className="fade-up min-w-0" style={{ animationDelay: '420ms' }}><FunnelCard siteId={siteId} funnel={data?.funnel ?? null} onSaved={() => loadStats(siteId)} /></div>
-              <div className="fade-up min-w-0" style={{ animationDelay: '440ms' }}><RetentionCard rows={data?.retention ?? []} /></div>
-              <div className="fade-up min-w-0 md:col-span-2" style={{ animationDelay: '460ms' }}><RevenueAttribCard data={data?.revAttrib} currency={currency} siteId={siteId} /></div>
-              <div id="ai-panel" className="fade-up min-w-0 scroll-mt-6 md:col-span-2" style={{ animationDelay: '480ms' }}><AiCard data={data} period={period} /></div>
-            </section>
+                ]} />,
+                feed: <FeedCard siteId={siteId} />,
+                heatmap: <HeatmapCard cells={data?.heatmap ?? []} />,
+                funnel: <FunnelCard siteId={siteId} funnel={data?.funnel ?? null} onSaved={() => loadStats(siteId)} />,
+                retention: <RetentionCard rows={data?.retention ?? []} />,
+                revenue: <RevenueAttribCard data={data?.revAttrib} currency={currency} siteId={siteId} />,
+                ai: <AiCard data={data} period={period} />,
+              };
+              const visible = cardOrder.filter((id) => !hiddenCards.includes(id));
+              const hidden = DEFAULT_CARDS.filter((id) => hiddenCards.includes(id));
+              return (
+                <>
+                  {editCards && (
+                    <div className="fade-up mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#ffa950]/40 bg-[#ffa950]/10 px-4 py-3">
+                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Drag cards to reorder. Tap the red button to hide one.</p>
+                      <div className="flex items-center gap-2">
+                        <button onClick={resetCards} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">Reset</button>
+                        <button onClick={() => setEditCards(false)} className="btn-primary px-4 py-1.5 text-xs">Done</button>
+                      </div>
+                    </div>
+                  )}
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onCardDragEnd}>
+                    <SortableContext items={visible} strategy={rectSortingStrategy}>
+                      <section className="grid gap-4 md:grid-cols-2">
+                        {visible.map((id) => (
+                          <SortableCard key={id} id={id} wide={WIDE_CARDS.has(id)} edit={editCards} onHide={() => hideCard(id)}>
+                            {cardNode[id]}
+                          </SortableCard>
+                        ))}
+                      </section>
+                    </SortableContext>
+                  </DndContext>
+                  {editCards && hidden.length > 0 && (
+                    <div className="mt-4 rounded-2xl border border-dashed border-[var(--card-border)] p-4">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Hidden cards</p>
+                      <div className="flex flex-wrap gap-2">
+                        {hidden.map((id) => (
+                          <button key={id} onClick={() => showCard(id)} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--card-border)] px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-[#ffa950]/60 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50">
+                            <PlusIcon /> {CARD_LABEL[id]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 

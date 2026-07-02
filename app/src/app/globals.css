@@ -236,6 +236,16 @@ summary::-webkit-details-marker {
   animation: num-roll 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* iOS-style wobble while reorganizing dashboard cards. */
+@keyframes jiggle {
+  0% { transform: rotate(-0.55deg); }
+  50% { transform: rotate(0.55deg); }
+  100% { transform: rotate(-0.55deg); }
+}
+.jiggle {
+  animation: jiggle 0.32s ease-in-out infinite;
+}
+
 /* Horizontal tab rows scroll on small screens with no visible bar. */
 .tabs-scroll {
   scrollbar-width: none;
