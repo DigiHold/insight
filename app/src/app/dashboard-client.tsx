@@ -912,18 +912,18 @@ function RetentionCard({ rows }: { rows: { cohort: string; offset: number; n: nu
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500">% of each week&apos;s visitors coming back</p>
         </div>
       </div>
-      <div className="mt-4 flex-1 overflow-x-auto">
+      <div className="mt-4 flex-1">
         {cohorts.length === 0 ? (
           <p className="px-2 py-8 text-center text-sm text-zinc-400 dark:text-zinc-600">Weekly cohorts appear once visitors start returning.</p>
         ) : (
-          <div className="min-w-[22rem]">
-            <div className="mb-1 flex items-center gap-1"><span className="w-16 shrink-0" />{Array.from({ length: maxOffset + 1 }, (_, i) => <span key={i} className="flex-1 text-center text-[9px] font-medium text-zinc-400 dark:text-zinc-500">W{i}</span>)}</div>
+          <div>
+            <div className="mb-1 flex items-center gap-0.5"><span className="w-11 shrink-0 sm:w-16" />{Array.from({ length: maxOffset + 1 }, (_, i) => <span key={i} className="flex-1 text-center text-[9px] font-medium text-zinc-400 dark:text-zinc-500">W{i}</span>)}</div>
             {cohorts.map((c) => {
               const size = byKey.get(`${c}-0`) ?? 0;
               const d = parseKey(c);
               return (
-                <div key={c} className="mb-1 flex items-center gap-1">
-                  <span className="w-16 shrink-0 text-[10px] font-medium text-zinc-500 dark:text-zinc-400">{d ? `${d.getDate()} ${MONTHS[d.getMonth()]}` : c}</span>
+                <div key={c} className="mb-1 flex items-center gap-0.5">
+                  <span className="w-11 shrink-0 text-[10px] font-medium text-zinc-500 sm:w-16 dark:text-zinc-400">{d ? `${d.getDate()} ${MONTHS[d.getMonth()]}` : c}</span>
                   {Array.from({ length: maxOffset + 1 }, (_, o) => {
                     const v = byKey.get(`${c}-${o}`) ?? 0;
                     const pct = size > 0 ? Math.round((v / size) * 100) : 0;
