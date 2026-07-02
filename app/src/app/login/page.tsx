@@ -56,7 +56,7 @@ export default function Login() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-5">
-      <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="card fade-up w-full max-w-sm p-8">
         <div className="mb-6 flex items-center gap-2.5">
           <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden>
             <rect width="32" height="32" rx="9" fill="#ffa950" />

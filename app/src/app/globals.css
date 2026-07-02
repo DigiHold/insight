@@ -1,10 +1,32 @@
 @import "tailwindcss";
 
-/* Le theme suit le systeme automatiquement (prefers-color-scheme). */
+/* ============================================================
+   Insight v2 — "Aurora Glass" design system.
+   Theme follows the system (prefers-color-scheme): a soft,
+   airy glass UI in light mode and a deep aurora-lit glass UI
+   in dark mode. One accent: #ffa950.
+   ============================================================ */
+
 :root {
+  --accent: #ffa950;
+  --accent-deep: #f5991f;
+  --accent-ink: #573310;
+
+  /* Legacy map palette (kept for the 2D map fallback). */
   --map-bg: #eef2f6;
   --map-fill: #d3d9e0;
   --map-stroke: #e7ebf0;
+
+  /* Glass tokens — light */
+  --page-bg: #f4f4f6;
+  --card-bg: rgba(255, 255, 255, 0.66);
+  --card-border: rgba(24, 24, 27, 0.08);
+  --card-highlight: rgba(255, 255, 255, 0.95);
+  --card-shadow: 0 1px 2px rgba(24, 24, 27, 0.04), 0 12px 32px -16px rgba(24, 24, 27, 0.18);
+  --spot: rgba(255, 169, 80, 0.12);
+  --aurora-a: rgba(255, 169, 80, 0.16);
+  --aurora-b: rgba(99, 102, 241, 0.1);
+  --aurora-c: rgba(45, 212, 191, 0.08);
 }
 
 html {
@@ -12,9 +34,10 @@ html {
 }
 
 body {
-  background: #fafafa;
+  background: var(--page-bg);
   color: #18181b;
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  min-height: 100vh;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,10 +45,44 @@ body {
     --map-bg: #0c0c0e;
     --map-fill: #26262b;
     --map-stroke: #161619;
+
+    /* Glass tokens — dark */
+    --page-bg: #08080c;
+    --card-bg: rgba(255, 255, 255, 0.045);
+    --card-border: rgba(255, 255, 255, 0.09);
+    --card-highlight: rgba(255, 255, 255, 0.28);
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -16px rgba(0, 0, 0, 0.6);
+    --spot: rgba(255, 169, 80, 0.1);
+    --aurora-a: rgba(255, 158, 60, 0.13);
+    --aurora-b: rgba(99, 102, 241, 0.12);
+    --aurora-c: rgba(45, 212, 191, 0.07);
   }
   body {
-    background: #09090b;
-    color: #e5e5e5;
+    color: #ececf1;
+  }
+}
+
+/* Aurora backdrop: three large color fields drifting very slowly
+   behind everything. Fixed so it stays put while scrolling. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 38% at 18% 8%, var(--aurora-a), transparent 70%),
+    radial-gradient(38% 42% at 85% 12%, var(--aurora-b), transparent 70%),
+    radial-gradient(50% 44% at 55% 96%, var(--aurora-c), transparent 72%);
+  animation: aurora-drift 46s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0.001deg);
+  }
+  100% {
+    transform: translate3d(2.5%, 1.8%, 0) rotate(0.001deg);
   }
 }
 
@@ -37,7 +94,7 @@ h3,
   letter-spacing: -0.015em;
 }
 
-/* Curseur pointer sur tout ce qui est cliquable, et pas d'outline moche. */
+/* Pointer cursor on everything clickable, no default outline ring. */
 button:not(:disabled),
 [role="button"],
 summary,
@@ -53,6 +110,19 @@ select:focus {
   outline: none;
 }
 
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Fields already show an accent border on focus: skip the outer ring. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
 summary::-webkit-details-marker {
   display: none;
 }
@@ -61,22 +131,164 @@ summary::-webkit-details-marker {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Thin, quiet scrollbars that match the glass. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 140, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 140, 0.35);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#ffa950] px-4 py-2 text-sm font-semibold text-[#573310] shadow-sm transition-all hover:bg-[#f5991f] hover:shadow active:scale-[0.98] disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#ffa950] px-4 py-2 text-sm font-semibold text-[#573310] transition-all hover:bg-[#f5991f] active:scale-[0.98] disabled:opacity-50;
+    box-shadow: 0 1px 2px rgba(87, 51, 16, 0.2), 0 0 0 rgba(255, 169, 80, 0);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 2px 6px rgba(87, 51, 16, 0.25), 0 0 24px rgba(255, 169, 80, 0.35);
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-600 shadow-sm transition-all hover:border-zinc-300 hover:text-zinc-900 active:scale-[0.98] disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:text-zinc-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition-all active:scale-[0.98] disabled:opacity-50;
+    border-color: var(--card-border);
+    background: var(--card-bg);
+    color: inherit;
+    backdrop-filter: blur(12px);
+  }
+  .btn-ghost:hover {
+    border-color: rgba(255, 169, 80, 0.5);
   }
   .field {
-    @apply w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 transition-colors focus:border-[#ffa950] focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100;
-  }
-  .card {
-    @apply rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50;
+    @apply w-full rounded-xl border px-3 py-2.5 text-sm transition-colors focus:border-[#ffa950] focus:outline-none;
+    border-color: var(--card-border);
+    background: var(--card-bg);
+    color: inherit;
   }
 }
 
-/* Popover Mapbox (carte visiteur): fond transparent, pas de fleche, croix discrete. */
+/* ------------------------------------------------------------
+   Glass card with a top light seam and a mouse-tracking
+   spotlight. --spot-x / --spot-y are set by a delegated
+   mousemove handler on the dashboard root.
+   ------------------------------------------------------------ */
+.card {
+  position: relative;
+  border-radius: 1.25rem;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--card-shadow);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+/* Top seam: a thin light line that makes the glass read as lit. */
+.card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 1.25rem;
+  right: 1.25rem;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--card-highlight), transparent);
+  opacity: 0.7;
+}
+
+/* Mouse spotlight: warm radial glow following the cursor. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background: radial-gradient(
+    460px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    var(--spot),
+    transparent 65%
+  );
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+.card:hover {
+  border-color: color-mix(in srgb, var(--card-border) 60%, var(--accent) 40%);
+}
+
+/* ------------------------------------------------------------
+   Motion: entry reveals and value roll-ins.
+   ------------------------------------------------------------ */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Metric value change: quick roll-in with a touch of blur. */
+@keyframes num-roll {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.num-roll {
+  display: inline-block;
+  animation: num-roll 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Soft neon glow on the main visitors line (chart). */
+.chart-glow {
+  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.35));
+}
+@media (prefers-color-scheme: dark) {
+  .chart-glow {
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.55));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none;
+  }
+  .fade-up,
+  .num-roll {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Mapbox visitor popup: transparent shell, no arrow, quiet close. */
 .insight-popup .mapboxgl-popup-content { padding: 0; background: transparent; box-shadow: none; border-radius: 0; }
 .insight-popup .mapboxgl-popup-tip { display: none; }
 .insight-popup .mapboxgl-popup-close-button { top: 6px; right: 8px; padding: 0 5px; font-size: 20px; line-height: 1; color: #a1a1aa; }

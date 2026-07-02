@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type SyntheticEvent } from 'react';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
 import dynamic from 'next/dynamic';
 
@@ -153,6 +153,16 @@ const plainItems = (rows: Row[], color: string, transform?: (s: string) => strin
 type Modal = null | { type: 'add' } | { type: 'script'; site: SiteItem } | { type: 'stripe'; site: SiteItem } | { type: 'ga4'; site: SiteItem } | { type: 'url'; site: SiteItem };
 type Period = 'today' | '7d' | '30d' | '90d';
 
+// One delegated mousemove for every glass card: feeds the CSS spotlight
+// (--spot-x / --spot-y) of the card currently under the cursor.
+function trackSpotlight(e: ReactMouseEvent<HTMLDivElement>) {
+  const card = (e.target as HTMLElement).closest?.('.card') as HTMLElement | null;
+  if (!card) return;
+  const r = card.getBoundingClientRect();
+  card.style.setProperty('--spot-x', `${e.clientX - r.left}px`);
+  card.style.setProperty('--spot-y', `${e.clientY - r.top}px`);
+}
+
 const PERIODS: Period[] = ['today', '7d', '30d', '90d'];
 
 export default function Dashboard() {
@@ -262,9 +272,9 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" onMouseMove={trackSpotlight}>
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-5">
-        <header className="mb-7 flex flex-wrap items-center justify-between gap-3">
+        <header className="fade-up mb-7 flex flex-wrap items-center justify-between gap-3">
           <Logo />
           <div className="flex flex-wrap items-center gap-2">
             {sites.length > 0 && (
@@ -278,7 +288,7 @@ export default function Dashboard() {
                     icon: <SiteFavicon id={s.id} url={s.url} />,
                   }))}
                 />
-                <div className="flex rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="flex rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-0.5 backdrop-blur-xl">
                   {(['today', '7d', '30d', '90d'] as Period[]).map((p) => (
                     <button
                       key={p}
@@ -329,7 +339,7 @@ export default function Dashboard() {
           <Onboarding onAdd={() => setModal({ type: 'add' })} />
         ) : (
           <>
-            <section className="mb-5 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50">
+            <section className="card fade-up mb-5 overflow-hidden" style={{ animationDelay: '80ms' }}>
               <div className={`grid grid-cols-2 md:grid-cols-4 ${metricCols}`}>
                 {metrics.map((m) => <MetricCell key={m.label} {...m} onClick={m.live ? () => setGlobeOpen(true) : undefined} />)}
               </div>
@@ -344,11 +354,11 @@ export default function Dashboard() {
                     >
                       <defs>
                         <linearGradient id="fillv" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
+                          <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
                           <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(130,130,140,.22)" />
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(130,130,140,.18)" />
                       <XAxis dataKey="h" tickLine={false} axisLine={{ stroke: 'rgba(130,130,140,.35)' }} tick={{ fill: '#a1a1aa', fontSize: 11 }} tickMargin={8} minTickGap={28} tickFormatter={axisLabel} />
                       <YAxis yAxisId="v" tickLine={false} axisLine={false} tick={{ fill: '#a1a1aa', fontSize: 11 }} width={38} allowDecimals={false} />
                       {hasRevenue && <YAxis yAxisId="r" orientation="right" tickLine={false} axisLine={false} tick={{ fill: '#a1a1aa', fontSize: 11 }} width={54} tickFormatter={(v: number) => fmtMoney(v, currency)} />}
@@ -358,7 +368,7 @@ export default function Dashboard() {
                           {chartData.map((_, i) => <Cell key={i} fill="#ffa950" fillOpacity={activeIdx === null ? 0.9 : i === activeIdx ? 1 : 0.25} />)}
                         </Bar>
                       )}
-                      <Area yAxisId="v" type="monotone" dataKey="v" stroke="#3b82f6" strokeWidth={2.5} fill="url(#fillv)" isAnimationActive={false} fillOpacity={chartHover ? 0.5 : 1} activeDot={{ r: 5, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }} />
+                      <Area yAxisId="v" type="monotone" dataKey="v" className="chart-glow" stroke="#3b82f6" strokeWidth={2.5} fill="url(#fillv)" isAnimationActive={false} fillOpacity={chartHover ? 0.5 : 1} activeDot={{ r: 5, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
@@ -368,20 +378,28 @@ export default function Dashboard() {
             </section>
 
             <section className="grid gap-4 md:grid-cols-2">
-              <TabbedCard title="Sources" tabs={[
-                { label: 'Channel', items: channelItems, donut: true },
-                { label: 'Referrer', items: referrerItems },
-                { label: 'Campaign', items: plainItems(data?.campaigns ?? [], ACCENT) },
-                { label: 'Keyword', icon: <SearchIcon />, items: keywordItems, detail: keywordDetail, emptyNote: keywordNote },
-              ]} />
-              <TabbedCard title="Top pages" metric="Views" tabs={[{ label: 'Top pages', items: plainItems(data?.pages ?? [], ACCENT) }]} />
-              <TabbedCard title="Technology" tabs={[
-                { label: 'Browser', items: browserItems },
-                { label: 'OS', items: osItems },
-                { label: 'Device', items: deviceItems },
-              ]} />
-              <TabbedCard title="Countries" tabs={[{ label: 'Countries', items: countryItems }]} />
-              <div className="md:col-span-2"><AiCard data={data} period={period} /></div>
+              <div className="fade-up min-w-0" style={{ animationDelay: '160ms' }}>
+                <TabbedCard title="Sources" tabs={[
+                  { label: 'Channel', items: channelItems, donut: true },
+                  { label: 'Referrer', items: referrerItems },
+                  { label: 'Campaign', items: plainItems(data?.campaigns ?? [], ACCENT) },
+                  { label: 'Keyword', icon: <SearchIcon />, items: keywordItems, detail: keywordDetail, emptyNote: keywordNote },
+                ]} />
+              </div>
+              <div className="fade-up min-w-0" style={{ animationDelay: '220ms' }}>
+                <TabbedCard title="Top pages" metric="Views" tabs={[{ label: 'Top pages', items: plainItems(data?.pages ?? [], ACCENT) }]} />
+              </div>
+              <div className="fade-up min-w-0" style={{ animationDelay: '280ms' }}>
+                <TabbedCard title="Technology" tabs={[
+                  { label: 'Browser', items: browserItems },
+                  { label: 'OS', items: osItems },
+                  { label: 'Device', items: deviceItems },
+                ]} />
+              </div>
+              <div className="fade-up min-w-0" style={{ animationDelay: '340ms' }}>
+                <TabbedCard title="Countries" tabs={[{ label: 'Countries', items: countryItems }]} />
+              </div>
+              <div className="fade-up md:col-span-2" style={{ animationDelay: '400ms' }}><AiCard data={data} period={period} /></div>
             </section>
           </>
         )}
@@ -437,19 +455,21 @@ function MetricCell({ label, value, live, change, inverse, revenue, onClick }: M
   return (
     <div
       onClick={onClick}
-      className={`group relative border-b border-r border-zinc-200 px-4 py-3.5 dark:border-zinc-800 ${onClick ? 'cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40' : ''}`}
+      className={`group relative border-b border-r border-[var(--card-border)] px-4 py-4 ${onClick ? 'cursor-pointer transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]' : ''}`}
     >
       <div className="flex items-center gap-1.5">
-        <p className="truncate text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</p>
+        <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</p>
         {live && (
           <span className="relative flex size-2 shrink-0">
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-70" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+            <span className="relative inline-flex size-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.9)]" />
           </span>
         )}
       </div>
-      <div className="mt-1 flex items-baseline gap-1.5">
-        <p className="head text-xl font-bold tabular-nums text-zinc-900 sm:text-2xl dark:text-zinc-50">{value}</p>
+      <div className="mt-1.5 flex items-baseline gap-1.5">
+        <p className="head text-2xl font-bold tabular-nums text-zinc-900 sm:text-[1.75rem] dark:text-zinc-50">
+          <span key={value} className="num-roll">{value}</span>
+        </p>
         {change !== undefined && change !== null && (
           <span className={`text-xs font-semibold ${rose ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{arrowUp ? '↑' : '↓'} {Math.abs(change)}%</span>
         )}
@@ -490,7 +510,7 @@ function TabbedCard({ title, tabs, emptyNote, metric = 'Visitors' }: { title: st
   const note = tab.emptyNote ?? emptyNote;
   const hasData = tab.detail ? tab.detail.rows.length > 0 : tab.items.length > 0;
   return (
-    <div className="card flex flex-col p-5">
+    <div className="card flex h-full flex-col p-5">
       <div className="flex items-center justify-between gap-3">
         <SegTabs tabs={tabs} active={idx} onSelect={setActive} />
         {!tab.donut && <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{metric}</span>}
@@ -506,7 +526,7 @@ function TabbedCard({ title, tabs, emptyNote, metric = 'Visitors' }: { title: st
         )}
       </div>
       {hasData && (
-        <div className="mt-3 flex justify-center border-t border-zinc-100 pt-3 dark:border-zinc-800/60">
+        <div className="mt-3 flex justify-center border-t border-[var(--card-border)] pt-3">
           <button onClick={() => setOpen(true)} className="inline-flex select-none items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400 opacity-90 transition-colors hover:text-zinc-800 hover:opacity-100 dark:hover:text-zinc-100">
             <ScanIcon /> Details
           </button>
@@ -520,7 +540,7 @@ function TabbedCard({ title, tabs, emptyNote, metric = 'Visitors' }: { title: st
 function SegTabs({ tabs, active, onSelect }: { tabs: Tab[]; active: number; onSelect: (i: number) => void }) {
   if (tabs.length <= 1) return <p className="head text-sm font-bold text-zinc-900 dark:text-zinc-50">{tabs[0]?.label}</p>;
   return (
-    <div className="inline-flex flex-wrap gap-0.5 self-start rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800/60">
+    <div className="inline-flex flex-wrap gap-0.5 self-start rounded-xl bg-black/[0.05] p-1 dark:bg-white/[0.06]">
       {tabs.map((t, i) => (
         <button
           key={t.label}
@@ -582,7 +602,7 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+      <div className="relative flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-[var(--card-border)] bg-white/90 shadow-2xl backdrop-blur-2xl dark:bg-zinc-900/85" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-4 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           {detail?.logo ?? <h3 className="head shrink-0 text-base font-bold text-zinc-900 dark:text-zinc-50">{title}</h3>}
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#ffa950] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
@@ -599,7 +619,7 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
               </thead>
               <tbody>
                 {rowIdx.map((ri) => (
-                  <tr key={ri} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/30">
+                  <tr key={ri} className="border-b border-[var(--card-border)] last:border-0 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
                     {detail.rows[ri].map((cell, ci) => <td key={ci} className={`truncate px-4 py-2.5 text-zinc-700 dark:text-zinc-200 ${alignCls(detail.align?.[ci])}`}>{cell}</td>)}
                   </tr>
                 ))}
@@ -618,7 +638,7 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
               </thead>
               <tbody>
                 {items.map((it, i) => (
-                  <tr key={it.key} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/30">
+                  <tr key={it.key} className="border-b border-[var(--card-border)] last:border-0 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
                     <td className="px-4 py-2.5 tabular-nums text-zinc-400">{i + 1}</td>
                     <td className="min-w-0 truncate py-2.5 text-zinc-700 dark:text-zinc-200"><span className="flex min-w-0 items-center gap-2">{it.left}</span></td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-medium text-zinc-800 dark:text-zinc-100">{fmt(it.value)}</td>
@@ -682,7 +702,7 @@ function AiCard({ data, period }: { data: Stats | null; period: Period }) {
   return (
     <div className="card p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap gap-0.5 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800/60">
+        <div className="inline-flex flex-wrap gap-0.5 rounded-xl bg-black/[0.05] p-1 dark:bg-white/[0.06]">
           {tabs.map((t) => (
             <button key={t.key} onClick={() => { setTab(t.key); setSel(null); }} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${tab === t.key ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-black/5 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-white/10' : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100'}`}>
               {t.icon}{t.label}<span className="tabular-nums text-zinc-400">{fmt(countOf(t.key))}</span>
@@ -716,7 +736,7 @@ function AiCard({ data, period }: { data: Stats | null; period: Period }) {
           )}
         </div>
 
-        <div className="h-72 min-w-0 self-stretch overflow-hidden rounded-xl border border-zinc-100 md:h-auto dark:border-zinc-800/60">
+        <div className="h-72 min-w-0 self-stretch overflow-hidden rounded-xl border border-[var(--card-border)] md:h-auto">
           {selected
             ? <AiBotPanel bot={selected} windowDays={windowDays} onClose={() => setSel(null)} />
             : <AiBotList bots={bots} query={q} onSelect={setSel} />}
@@ -769,7 +789,7 @@ function AiBotPanel({ bot, windowDays, onClose }: { bot: AiBot; windowDays: numb
   const pages = bot.pages.filter((p) => !query || p.name.toLowerCase().includes(query));
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 border-b border-zinc-100 p-3 dark:border-zinc-800/60">
+      <div className="flex items-center gap-3 border-b border-[var(--card-border)] p-3">
         <BotBadge vendor={bot.vendor} />
         <div className="min-w-0 flex-1">
           <p className="head truncate text-sm font-bold text-zinc-900 dark:text-zinc-50">{bot.name}</p>
@@ -782,7 +802,7 @@ function AiBotPanel({ bot, windowDays, onClose }: { bot: AiBot; windowDays: numb
       </div>
       <div className="flex-1 overflow-y-auto px-3 pb-1">
         {pages.map((p) => (
-          <div key={p.name} className="flex items-center justify-between gap-3 border-b border-zinc-100 py-2 last:border-0 dark:border-zinc-800/60">
+          <div key={p.name} className="flex items-center justify-between gap-3 border-b border-[var(--card-border)] py-2 last:border-0">
             <span className="truncate font-mono text-xs text-zinc-700 dark:text-zinc-200" title={p.name}>{p.name}</span>
             <span className="shrink-0 tabular-nums text-sm text-zinc-500 dark:text-zinc-400">{fmt(p.count)}</span>
           </div>
@@ -839,7 +859,7 @@ function Onboarding({ onAdd }: { onAdd: () => void }) {
 function Overlay({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--card-border)] bg-white/90 p-6 shadow-2xl backdrop-blur-2xl dark:bg-zinc-900/85" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close" className="absolute right-3.5 top-3.5 flex size-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
           <CloseIcon />
         </button>
@@ -897,7 +917,7 @@ function Menu({ button, buttonClass, align = 'left', children }: { button: React
     <div ref={ref} className="relative">
       <button type="button" onClick={() => setOpen((o) => !o)} className={buttonClass}>{button}</button>
       {open && (
-        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} z-30 mt-1 max-h-72 min-w-[13rem] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-800 dark:bg-zinc-900`}>
+        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} z-30 mt-1 max-h-72 min-w-[13rem] overflow-y-auto rounded-xl border border-[var(--card-border)] bg-white/85 p-1 shadow-xl backdrop-blur-xl dark:bg-zinc-900/85`}>
           {children(() => setOpen(false))}
         </div>
       )}
@@ -910,7 +930,7 @@ function Dropdown({ value, options, onChange }: { value: string; options: DropOp
   return (
     <Menu
       align="left"
-      buttonClass="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-700"
+      buttonClass="flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm font-semibold text-zinc-800 backdrop-blur-xl transition-colors hover:border-[#ffa950]/50 dark:text-zinc-100"
       button={<>{current?.icon}<span className="max-w-[9rem] truncate">{current?.label ?? 'Select'}</span><ChevronDown /></>}
     >
       {(close) => options.map((o) => (
