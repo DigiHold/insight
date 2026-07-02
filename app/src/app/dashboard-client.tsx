@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type SyntheticEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
 import dynamic from 'next/dynamic';
 
@@ -150,18 +150,9 @@ interface Tab { label: string; icon?: ReactNode; items: Item[]; donut?: boolean;
 const plainItems = (rows: Row[], color: string, transform?: (s: string) => string): Item[] =>
   rows.map((r) => ({ key: r.name || '—', left: <span className="truncate">{(transform ?? ((s) => s || '/'))(r.name)}</span>, value: r.count, color }));
 
-type Modal = null | { type: 'add' } | { type: 'script'; site: SiteItem } | { type: 'stripe'; site: SiteItem } | { type: 'ga4'; site: SiteItem } | { type: 'url'; site: SiteItem };
+type Modal = null | { type: 'add' } | { type: 'script'; site: SiteItem } | { type: 'stripe'; site: SiteItem } | { type: 'ga4'; site: SiteItem } | { type: 'url'; site: SiteItem } | { type: 'delete'; site: SiteItem };
 type Period = 'today' | '7d' | '30d' | '90d';
 
-// One delegated mousemove for every glass card: feeds the CSS spotlight
-// (--spot-x / --spot-y) of the card currently under the cursor.
-function trackSpotlight(e: ReactMouseEvent<HTMLDivElement>) {
-  const card = (e.target as HTMLElement).closest?.('.card') as HTMLElement | null;
-  if (!card) return;
-  const r = card.getBoundingClientRect();
-  card.style.setProperty('--spot-x', `${e.clientX - r.left}px`);
-  card.style.setProperty('--spot-y', `${e.clientY - r.top}px`);
-}
 
 const PERIODS: Period[] = ['today', '7d', '30d', '90d'];
 
@@ -278,75 +269,102 @@ export default function Dashboard() {
 
   const logout = async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login'; };
 
+  // Site actions menu, shared by the mobile and desktop headers.
+  const siteMenu = site && (
+    <Menu align="right" buttonClass="flex size-9 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-700 dark:hover:bg-white/[0.07] dark:hover:text-zinc-200" button={<DotsIcon />}>
+      {(close) => (
+        <>
+          <MenuItem icon={<CodeIcon />} onClick={() => { setModal({ type: 'script', site }); close(); }}>Show tracking script</MenuItem>
+          <MenuItem icon={<LinkIcon />} onClick={() => { setModal({ type: 'url', site }); close(); }}>Set website URL</MenuItem>
+          {site.stripe
+            ? <MenuItem icon={<StripeIcon />} onClick={async () => { await fetch(`/api/sites/stripe?siteId=${site.id}`, { method: 'DELETE' }); loadSites(); close(); }}>Disconnect Stripe</MenuItem>
+            : <MenuItem icon={<StripeIcon />} onClick={() => { setModal({ type: 'stripe', site }); close(); }}>Connect Stripe</MenuItem>}
+          {site.ga4
+            ? <MenuItem icon={<GaIcon />} onClick={async () => { await fetch(`/api/sites/ga4?siteId=${site.id}`, { method: 'DELETE' }); loadSites(); close(); }}>Disconnect GA4</MenuItem>
+            : <MenuItem icon={<GaIcon />} onClick={() => { setModal({ type: 'ga4', site }); close(); }}>Connect GA4</MenuItem>}
+          <MenuItem danger icon={<TrashIcon />} onClick={() => { setModal({ type: 'delete', site }); close(); }}>Delete site</MenuItem>
+        </>
+      )}
+    </Menu>
+  );
+
+  const liveChip = sites.length > 0 && (
+    <button
+      onClick={() => setGlobeOpen(true)}
+      title="Open the live map"
+      className="flex shrink-0 items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/[0.08] py-1.5 pl-2.5 pr-3 text-xs font-semibold text-emerald-700 transition-colors hover:border-emerald-500/50 dark:text-emerald-400"
+    >
+      <span className="relative flex size-2">
+        <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-70" />
+        <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+      </span>
+      <span className="tabular-nums">{fmt(online)}</span> live
+    </button>
+  );
+
+  const siteDropdown = (wide: boolean) => sites.length > 0 && (
+    <Dropdown
+      wide={wide}
+      value={siteId}
+      onChange={setSiteId}
+      options={sites.map((s) => ({
+        value: s.id,
+        label: s.name,
+        icon: <SiteFavicon id={s.id} url={s.url} />,
+      }))}
+    />
+  );
+
+  const periodPills = (grow: boolean) => sites.length > 0 && (
+    <div className={`${grow ? 'grid w-full grid-cols-4' : 'flex'} rounded-full border border-[var(--card-border)] bg-[var(--card-bg)] p-1 backdrop-blur-xl`}>
+      {(['today', '7d', '30d', '90d'] as Period[]).map((p) => (
+        <button
+          key={p}
+          onClick={() => setPeriod(p)}
+          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${period === p ? 'bg-[#ffa950] text-[#573310] shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+        >
+          {p === 'today' ? 'Today' : p.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen" onMouseMove={trackSpotlight}>
+    <div className="min-h-screen">
       <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
-          <header className="fade-up mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-              <Logo />
+          <header className="fade-up relative z-40 mb-6">
+            {/* Mobile: three stacked rows — identity, site tools, period. */}
+            <div className="flex flex-col gap-2.5 md:hidden">
+              <div className="flex items-center justify-between">
+                <Logo />
+                <div className="flex items-center gap-1.5">
+                  {liveChip}
+                  <button onClick={logout} aria-label="Log out" title="Log out" className="flex size-9 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10"><PowerIcon /></button>
+                </div>
+              </div>
               {sites.length > 0 && (
-                <>
-                  <Dropdown
-                    value={siteId}
-                    onChange={setSiteId}
-                    options={sites.map((s) => ({
-                      value: s.id,
-                      label: s.name,
-                      icon: <SiteFavicon id={s.id} url={s.url} />,
-                    }))}
-                  />
-                  {site && (
-                    <Menu align="left" buttonClass="flex size-9 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-700 dark:hover:bg-white/[0.07] dark:hover:text-zinc-200" button={<DotsIcon />}>
-                      {(close) => (
-                        <>
-                          <MenuItem icon={<CodeIcon />} onClick={() => { setModal({ type: 'script', site }); close(); }}>Show tracking script</MenuItem>
-                          <MenuItem icon={<LinkIcon />} onClick={() => { setModal({ type: 'url', site }); close(); }}>Set website URL</MenuItem>
-                          {site.stripe
-                            ? <MenuItem icon={<StripeIcon />} onClick={async () => { await fetch(`/api/sites/stripe?siteId=${site.id}`, { method: 'DELETE' }); loadSites(); close(); }}>Disconnect Stripe</MenuItem>
-                            : <MenuItem icon={<StripeIcon />} onClick={() => { setModal({ type: 'stripe', site }); close(); }}>Connect Stripe</MenuItem>}
-                          {site.ga4
-                            ? <MenuItem icon={<GaIcon />} onClick={async () => { await fetch(`/api/sites/ga4?siteId=${site.id}`, { method: 'DELETE' }); loadSites(); close(); }}>Disconnect GA4</MenuItem>
-                            : <MenuItem icon={<GaIcon />} onClick={() => { setModal({ type: 'ga4', site }); close(); }}>Connect GA4</MenuItem>}
-                          <MenuItem danger icon={<TrashIcon />} onClick={async () => {
-                            close();
-                            if (!confirm(`Delete ${site.name}? This permanently removes the site and all its Insight + GA4 data and favicon.`)) return;
-                            await fetch(`/api/sites?id=${site.id}`, { method: 'DELETE' });
-                            loadSites();
-                          }}>Delete site</MenuItem>
-                        </>
-                      )}
-                    </Menu>
-                  )}
-                  <button
-                    onClick={() => setGlobeOpen(true)}
-                    title="Open the live map"
-                    className="flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/[0.08] py-1.5 pl-2.5 pr-3 text-xs font-semibold text-emerald-700 transition-colors hover:border-emerald-500/50 dark:text-emerald-400"
-                  >
-                    <span className="relative flex size-2">
-                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-70" />
-                      <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-                    </span>
-                    <span className="tabular-nums">{fmt(online)}</span> live
-                  </button>
-                </>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {sites.length > 0 && (
-                <div className="flex rounded-full border border-[var(--card-border)] bg-[var(--card-bg)] p-1 backdrop-blur-xl">
-                  {(['today', '7d', '30d', '90d'] as Period[]).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPeriod(p)}
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${period === p ? 'bg-[#ffa950] text-[#573310] shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
-                    >
-                      {p === 'today' ? 'Today' : p.toUpperCase()}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-1.5">
+                  <div className="min-w-0 flex-1">{siteDropdown(true)}</div>
+                  {siteMenu}
+                  <button onClick={() => setModal({ type: 'add' })} aria-label="Add site" className="btn-primary shrink-0 px-3"><PlusIcon /></button>
                 </div>
               )}
-              <button onClick={() => setModal({ type: 'add' })} className="btn-primary max-sm:px-3"><PlusIcon /><span className="hidden sm:inline">Add site</span></button>
-              <button onClick={logout} aria-label="Log out" title="Log out" className="flex size-9 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10"><PowerIcon /></button>
+              {periodPills(true)}
+            </div>
+
+            {/* Desktop: one row. */}
+            <div className="hidden md:flex md:flex-wrap md:items-center md:justify-between md:gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                <Logo />
+                {siteDropdown(false)}
+                {siteMenu}
+                {liveChip}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {periodPills(false)}
+                <button onClick={() => setModal({ type: 'add' })} className="btn-primary"><PlusIcon />Add site</button>
+                <button onClick={logout} aria-label="Log out" title="Log out" className="flex size-9 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10"><PowerIcon /></button>
+              </div>
             </div>
           </header>
 
@@ -355,7 +373,7 @@ export default function Dashboard() {
         ) : (
           <>
             <section className="fade-up mb-4 grid gap-4 lg:grid-cols-[280px_1fr]" style={{ animationDelay: '80ms' }}>
-              <div className="card flex flex-col p-6">
+              <div className="card relative z-10 flex flex-col p-6">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">{periodTag}</p>
                 <div className="mt-2 flex items-baseline gap-2">
                   <span className="head text-5xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -442,6 +460,21 @@ export default function Dashboard() {
       {modal?.type === 'stripe' && <StripeModal site={modal.site} onClose={() => setModal(null)} onDone={() => { loadSites(); setModal(null); }} />}
       {modal?.type === 'ga4' && <Ga4Modal site={modal.site} onClose={() => setModal(null)} onDone={() => { loadSites(); setModal(null); }} />}
       {modal?.type === 'url' && <UrlModal site={modal.site} onClose={() => setModal(null)} onDone={() => { loadSites(); setModal(null); }} />}
+      {modal?.type === 'delete' && (
+        <Overlay onClose={() => setModal(null)}>
+          <h3 className="head mb-2 text-lg font-bold text-zinc-900 dark:text-zinc-50">Delete {modal.site.name}?</h3>
+          <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">This permanently removes the site, all its Insight and GA4 data, and its favicon. This cannot be undone.</p>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setModal(null)} className="rounded-xl px-3 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">Cancel</button>
+            <button
+              onClick={async () => { await fetch(`/api/sites?id=${modal.site.id}`, { method: 'DELETE' }); setModal(null); loadSites(); }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-rose-700 active:scale-[0.98]"
+            >
+              <TrashIcon /> Delete site
+            </button>
+          </div>
+        </Overlay>
+      )}
       {globeOpen && <GlobeModal site={siteId} onClose={() => setGlobeOpen(false)} />}
     </div>
   );
@@ -553,7 +586,7 @@ function TabbedCard({ title, icon, tabs, emptyNote, metric = 'Visitors' }: { tit
       </div>
 
       {tabs.length > 1 && (
-        <div className="mt-3 flex gap-4 overflow-x-auto border-b border-[var(--card-border)]">
+        <div className="tabs-scroll mt-3 flex gap-4 overflow-x-auto border-b border-[var(--card-border)]">
           {tabs.map((t, i) => (
             <button
               key={t.label}
@@ -755,7 +788,7 @@ function AiCard({ data, period }: { data: Stats | null; period: Period }) {
         )}
       </div>
 
-      <div className="mt-3 flex gap-4 overflow-x-auto border-b border-[var(--card-border)]">
+      <div className="tabs-scroll mt-3 flex gap-4 overflow-x-auto border-b border-[var(--card-border)]">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -968,13 +1001,13 @@ function Menu({ button, buttonClass, align = 'left', children }: { button: React
   );
 }
 
-function Dropdown({ value, options, onChange }: { value: string; options: DropOption[]; onChange: (v: string) => void }) {
+function Dropdown({ value, options, onChange, wide }: { value: string; options: DropOption[]; onChange: (v: string) => void; wide?: boolean }) {
   const current = options.find((o) => o.value === value);
   return (
     <Menu
       align="left"
-      buttonClass="flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm font-semibold text-zinc-800 backdrop-blur-xl transition-colors hover:border-[#ffa950]/50 dark:text-zinc-100"
-      button={<>{current?.icon}<span className="max-w-[9rem] truncate">{current?.label ?? 'Select'}</span><ChevronDown /></>}
+      buttonClass={`flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm font-semibold text-zinc-800 backdrop-blur-xl transition-colors hover:border-[#ffa950]/50 dark:text-zinc-100 ${wide ? 'w-full' : ''}`}
+      button={<>{current?.icon}<span className={`truncate ${wide ? 'flex-1 text-left' : 'max-w-[9rem]'}`}>{current?.label ?? 'Select'}</span><ChevronDown /></>}
     >
       {(close) => options.map((o) => (
         <button
