@@ -156,11 +156,17 @@ export async function ga4LiveStats(json: string, propertyId: string, days: numbe
 
 // Custom date range (YYYY-MM-DD, inclusive). Previous range = same length just before.
 export async function ga4RangeStats(json: string, propertyId: string, from: string, to: string): Promise<Ga4Stats | null> {
-  const f = new Date(`${from}T00:00:00Z`).getTime();
-  const t = new Date(`${to}T00:00:00Z`).getTime();
-  const span = Math.max(86400000, t - f + 86400000);
   const iso = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
-  return cached(`${propertyId}:${from}:${to}`, 300000, () => runLive(json, propertyId, from, to, 'date', iso(f - span), iso(f - 86400000)));
+  // GA4 rejects an endDate after the property's today (which can be a day
+  // behind the browser), so we cap the end at yesterday. Today's partial day
+  // is not part of a historical range anyway; the Today period covers it.
+  const yesterday = iso(Date.now() - 86400000);
+  const end = to > yesterday ? yesterday : to;
+  if (from > end) return null;
+  const f = new Date(`${from}T00:00:00Z`).getTime();
+  const t = new Date(`${end}T00:00:00Z`).getTime();
+  const span = Math.max(86400000, t - f + 86400000);
+  return cached(`${propertyId}:${from}:${end}`, 300000, () => runLive(json, propertyId, from, end, 'date', iso(f - span), iso(f - 86400000)));
 }
 
 // Today: same source as GA4 (today's date), series by hour. Short cache (real time).

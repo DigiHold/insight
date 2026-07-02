@@ -1029,11 +1029,11 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#ffa950] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
           <button onClick={onClose} aria-label="Close" className="flex size-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"><CloseIcon /></button>
         </div>
-        <div className="overflow-y-auto">
+        <div className="overflow-auto">
           {detail ? (
-            <table className="w-full table-fixed text-sm">
+            <table className="w-full min-w-[34rem] table-fixed text-sm">
               <colgroup>{detail.columns.map((c, i) => <col key={c} style={detail.widths?.[i] ? { width: detail.widths[i] } : undefined} />)}</colgroup>
-              <thead className="sticky top-0 bg-white dark:bg-zinc-900">
+              <thead className="sticky top-0 bg-white dark:bg-[#131318]">
                 <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-400 dark:border-zinc-800">
                   {detail.columns.map((c, i) => <th key={c} className={`px-4 py-2.5 font-semibold ${alignCls(detail.align?.[i])}`}>{c}</th>)}
                 </tr>
