@@ -77,15 +77,34 @@ Log in to the dashboard, click "Add site", and give it a name and its URL. You g
 
 Put it once in your site's `<head>`. That single line handles pageviews, the live heartbeat, outbound-link clicks, and the server-side AI-crawler detection. There is nothing else to install.
 
-## 5. Dashboard login and 2FA (self-hosted auth)
+## 5. Create the admin account and 2FA (self-hosted auth)
 
-Auth is fully self-hosted. There is no external identity provider and no account on any server but yours.
+Auth is fully self-hosted. There is no external identity provider and no account on any server but yours. The dashboard has no public sign-up page and no "register" endpoint, so an admin account cannot be created over the network on your instance. The only admin is the one whose credentials you place in the server environment, and only someone with shell or `.env` access to your own box can set them.
 
-- The admin account is the `ADMIN_EMAIL` and `ADMIN_PASSWORD` you set in `.env`.
-- On the first successful login, Insight shows a QR code. Scan it with an authenticator app (Google Authenticator, 1Password, Authy) and enter the 6-digit code. Two-factor is then required on every login.
-- Sessions are signed with `AUTH_SECRET` and last 30 days. The dashboard is `noindex` and disallowed in `robots.txt`, so it never shows up in search.
+Create the account by setting three values in `.env` before the first start:
 
-To reset access, change the values in `.env`, delete `auth.json` in the data volume to re-enroll 2FA, and restart the container.
+```bash
+# A long random string. It signs sessions and salts visitor hashing, so keep it stable.
+AUTH_SECRET=$(openssl rand -hex 32)
+# Your login. Use a real address you control and a long, unique password.
+ADMIN_EMAIL=you@example.com
+ADMIN_PASSWORD=<a long random password from a password manager>
+```
+
+Then enroll 2FA on the first login:
+
+1. Open the dashboard and enter that email and password. Wrong credentials never reach the 2FA step, so nobody can start enrollment without the password you set.
+2. Insight generates a TOTP secret and shows a QR code. Scan it with an authenticator app such as Google Authenticator, 1Password, or Authy, then enter the 6-digit code.
+3. From then on the code is required on every login. The secret is written to `auth.json` inside your data volume and never leaves the server.
+
+Why this stays secure on a public codebase:
+
+- Credentials live only in your server environment, never in the code or the repository. Anyone can read the source without learning how to reach your dashboard.
+- Enrollment is gated by the password, and the password is compared in constant time. The QR code and secret are returned only after the correct password.
+- Sessions are HMAC-signed with `AUTH_SECRET` and expire after 30 days. If `AUTH_SECRET` is weak, sessions can be forged, so generate it with `openssl rand -hex 32` and keep it private.
+- The dashboard is `noindex` and disallowed in `robots.txt`, so it never shows up in search.
+
+To reset access, change the values in `.env`, delete `auth.json` in the data volume to force a fresh 2FA enrollment, then restart the container.
 
 ## 6. Connect Mapbox (the globe)
 

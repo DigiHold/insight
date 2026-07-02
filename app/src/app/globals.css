@@ -32,8 +32,12 @@ html {
   color-scheme: light dark;
 }
 
+/* overflow-x: clip (not hidden) avoids the intermittent iOS Safari bug where
+   overflow-x on <body> spawns a phantom scroll container with a huge blank gap
+   below the content. clip trims horizontal overflow without a scroll box. */
+html,
 body {
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {

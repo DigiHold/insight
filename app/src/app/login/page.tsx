@@ -64,7 +64,12 @@ export default function Login() {
             <rect x="14" y="12" width="4" height="13" rx="2" fill="#fff" fillOpacity={0.7} />
             <rect x="20" y="7" width="4" height="18" rx="2" fill="#fff" />
           </svg>
-          <span className="head text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Insight</span>
+          <div className="flex flex-col leading-tight">
+            <span className="head text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Insight</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">
+              by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="font-medium text-zinc-500 underline-offset-2 hover:text-[#ffa950] hover:underline dark:text-zinc-400">Nicolas Lecocq</a>
+            </span>
+          </div>
         </div>
 
         {step === 'password' && (
