@@ -158,6 +158,8 @@ Backups land in `/opt/insight/backups`. For off-server copies, add an `rclone co
 
 ## 11. One-click Google connection (OAuth), self-hosted
 
+> Planned. Today GA4 and Search Console connect through the service account in section 8. This section describes the one-click flow that replaces it.
+
 The service-account flow in section 8 works but takes a few manual steps. The one-click alternative uses your own Google OAuth app, so connecting GA4 and Search Console becomes a single consent popup that then lists your properties in a dropdown.
 
 Because Insight is self-hosted, each operator uses their own Google OAuth app. That keeps it free and avoids Google's app-verification review, which only applies to a central published app. Setup, once per install:
