@@ -78,6 +78,7 @@ const DOMAIN_ICON: Record<string, string> = {
   'bing.com': 'bing', 'www.bing.com': 'bing', 'cn.bing.com': 'bing',
   'yahoo.com': 'yahoo', 'www.yahoo.com': 'yahoo', 'search.yahoo.com': 'yahoo', 'r.search.yahoo.com': 'yahoo',
   'copilot.microsoft.com': 'copilot', 'you.com': 'you',
+  'sendinblue.com': 'brevo', 'brevo.com': 'brevo', 'sibautomation.com': 'brevo',
 };
 // Pale background per vendor for the crawler icon square (each brand has its own tint).
 const VENDOR_TINT: Record<string, string> = {
@@ -94,7 +95,7 @@ const VENDOR_TINT: Record<string, string> = {
 };
 const vendorTint = (v: string): string => VENDOR_TINT[v] ?? 'bg-zinc-100 dark:bg-zinc-800';
 const OS_SLUG: Record<string, string> = { macos: 'apple', macintosh: 'apple', ios: 'apple', android: 'android', linux: 'linux', ubuntu: 'ubuntu', 'chrome os': 'chrome', chromeos: 'chrome' };
-const BROWSER_LOGO: Record<string, string> = { chrome: 'chrome', safari: 'safari', firefox: 'firefox', edge: 'edge', opera: 'opera', brave: 'brave' };
+const BROWSER_LOGO: Record<string, string> = { chrome: 'chrome', safari: 'safari', 'safari (in-app)': 'safari', 'mobile safari': 'safari', firefox: 'firefox', edge: 'edge', 'microsoft edge': 'edge', opera: 'opera', brave: 'brave', 'samsung internet': 'samsung', 'android webview': 'chrome' };
 
 const cap = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 let regionNames: Intl.DisplayNames | null = null;
@@ -819,13 +820,14 @@ function HeatmapCard({ cells }: { cells: { d: number; h: number; c: number }[] }
   const max = cells.reduce((a, b) => Math.max(a, b.c), 0);
   const byKey = new Map(cells.map((c) => [`${c.d}-${c.h}`, c.c]));
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const [hover, setHover] = useState<string | null>(null);
   return (
-    <div className="card flex h-full flex-col p-5">
+    <div className="card flex h-full flex-col p-5" onMouseLeave={() => setHover(null)}>
       <div className="flex items-center gap-2.5">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#ffa950]/15 text-[#b06a1f] dark:bg-[#ffa950]/10 dark:text-[#ffa950]"><ClockIcon /></span>
         <div className="min-w-0">
           <h3 className="head text-sm font-bold text-zinc-900 dark:text-zinc-50">Busy hours</h3>
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">visitors by hour · last 4 weeks (UTC)</p>
+          <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">{hover ?? <span className="text-zinc-400 dark:text-zinc-500">visitors by hour · last 4 weeks (UTC)</span>}</p>
         </div>
       </div>
       <div className="mt-4 flex-1 overflow-x-auto">
@@ -837,7 +839,7 @@ function HeatmapCard({ cells }: { cells: { d: number; h: number; c: number }[] }
                 {Array.from({ length: 24 }, (_, h) => {
                   const c = byKey.get(`${di + 1}-${h}`) ?? 0;
                   const alpha = max > 0 ? c / max : 0;
-                  return <span key={h} title={`${day} ${String(h).padStart(2, '0')}:00 — ${fmt(c)} visitors`} className="aspect-square rounded-[3px]" style={alpha === 0 ? { backgroundColor: 'rgba(128,128,140,0.12)' } : { backgroundColor: '#ffa950', opacity: 0.15 + alpha * 0.85 }} />;
+                  return <span key={h} onMouseEnter={() => setHover(`${day} ${String(h).padStart(2, '0')}:00 — ${fmt(c)} visitor${c === 1 ? '' : 's'}`)} className="aspect-square rounded-[3px] transition-transform hover:scale-125 hover:ring-1 hover:ring-[#ffa950]" style={alpha === 0 ? { backgroundColor: 'rgba(128,128,140,0.12)' } : { backgroundColor: '#ffa950', opacity: 0.15 + alpha * 0.85 }} />;
                 })}
               </div>
             </div>
@@ -1441,19 +1443,52 @@ function CheckMark() {
   return <svg className="size-3.5 shrink-0 text-[#ffa950]" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M3.5 8.5l3 3 6-6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 
+// Brands whose official logo is black/monochrome: invert to white in dark mode.
+const DARK_BRANDS = new Set(['apple', 'openai', 'x', 'anthropic', 'threads']);
+// Map an arbitrary hostname to a known brand slug (regional/subdomain variants).
+function brandFromHost(host: string): string | null {
+  if (DOMAIN_ICON[host]) return DOMAIN_ICON[host];
+  const h = host.toLowerCase();
+  const has = (...parts: string[]) => parts.some((p) => h.includes(p));
+  if (has('google.')) return 'google';
+  if (has('bing.')) return 'bing';
+  if (has('yahoo.')) return 'yahoo';
+  if (has('duckduckgo')) return 'duckduckgo';
+  if (has('ecosia')) return 'ecosia';
+  if (has('qwant')) return 'qwant';
+  if (has('linkedin', 'lnkd.in')) return 'linkedin';
+  if (has('facebook', 'fb.com', 'fb.me')) return 'facebook';
+  if (has('instagram')) return 'instagram';
+  if (has('youtube', 'youtu.be')) return 'youtube';
+  if (has('tiktok')) return 'tiktok';
+  if (has('reddit')) return 'reddit';
+  if (has('brave.com')) return 'brave';
+  if (has('chatgpt', 'openai')) return 'openai';
+  if (has('perplexity')) return 'perplexity';
+  if (has('claude', 'anthropic')) return 'anthropic';
+  if (has('gemini.google')) return 'gemini';
+  if (has('twitter', 'x.com', 't.co')) return 'x';
+  if (has('sendinblue', 'brevo')) return 'brevo';
+  if (has('copilot')) return 'copilot';
+  if (has('you.com')) return 'you';
+  return null;
+}
+
 // Official brand SVG served locally from /public/i, with a neutral-globe
-// fallback for brands not yet bundled.
+// fallback for brands not yet bundled. Dark/monochrome logos flip to white in
+// dark mode so they stay visible.
 function BrandSvg({ name, size = 16, className = 'size-4 shrink-0 object-contain' }: { name: string; size?: number; className?: string }) {
   const [broken, setBroken] = useState(false);
   if (!name || broken) return <GlobeSmall />;
-  return <img src={`/i/${name}.svg`} alt="" width={size} height={size} style={{ width: size, height: size }} className={className} onError={() => setBroken(true)} />;
+  const dark = DARK_BRANDS.has(name) ? 'dark:invert' : '';
+  return <img src={`/i/${name}.svg`} alt="" width={size} height={size} style={{ width: size, height: size }} className={`${className} ${dark}`} onError={() => setBroken(true)} />;
 }
 // Referrer favicon: known brands use the local SVG; any other host is proxied
 // and cached on the VPS (SVG first), so the browser never hits a third party.
 function DomainIcon({ domain }: { domain: string }) {
   const [broken, setBroken] = useState(false);
-  const slug = DOMAIN_ICON[domain];
-  if (slug) return <BrandSvg name={slug} className="size-4 shrink-0 rounded" />;
+  const slug = brandFromHost(domain);
+  if (slug) return <BrandSvg name={slug} className="size-4 shrink-0 rounded object-contain" />;
   if (!domain || broken) return <GlobeSmall />;
   return <img src={`/api/icon?d=${encodeURIComponent(domain)}`} alt="" width={16} height={16} className="size-4 shrink-0 rounded object-contain" onError={() => setBroken(true)} />;
 }

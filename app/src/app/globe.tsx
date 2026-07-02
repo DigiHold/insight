@@ -62,7 +62,7 @@ function setMarkerSize(el: HTMLElement, size: number): void {
 
 // The popover is a native Mapbox Popup (it follows the avatar and disappears behind the globe). Its
 // content is HTML, with icons (flag, OS, device, browser, referrer favicon).
-const BROWSER_LOGO: Record<string, string> = { chrome: 'chrome', safari: 'safari', firefox: 'firefox', edge: 'edge', opera: 'opera', brave: 'brave' };
+const BROWSER_LOGO: Record<string, string> = { chrome: 'chrome', safari: 'safari', 'safari (in-app)': 'safari', 'mobile safari': 'safari', firefox: 'firefox', edge: 'edge', 'microsoft edge': 'edge', opera: 'opera', brave: 'brave', 'samsung internet': 'samsung', 'android webview': 'chrome' };
 const OS_SLUG: Record<string, string> = { macos: 'apple', macintosh: 'apple', ios: 'apple', android: 'android', linux: 'linux', ubuntu: 'ubuntu', 'chrome os': 'chrome', chromeos: 'chrome' };
 const hostOf = (u: string): string => { try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname; } catch { return ''; } };
 
@@ -76,7 +76,9 @@ const osHTML = (name: string): string => {
   const s = name.toLowerCase();
   if (s === 'windows') return `<svg width="16" height="16" viewBox="0 0 24 24" fill="#f4f4f5" style="${S16}"><path d="M3 5.6 10.2 4.6v6.9H3zM11.2 4.5 21 3.2v8.3h-9.8zM3 12.5h7.2v6.9L3 18.4zM11.2 12.5H21v8.3l-9.8-1.3z"/></svg>`;
   const slug = OS_SLUG[s];
-  return slug ? imgHTML(`/i/${slug}.svg`, S16) : '<span style="width:16px"></span>';
+  if (!slug) return '<span style="width:16px"></span>';
+  const inv = slug === 'apple' ? ';filter:invert(1)' : '';
+  return imgHTML(`/i/${slug}.svg`, S16 + inv);
 };
 const deviceHTML = (name: string): string => {
   const s = name.toLowerCase();
