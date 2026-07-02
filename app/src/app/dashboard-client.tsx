@@ -376,7 +376,7 @@ export default function Dashboard() {
           onClick={() => { if (p === 'custom') { setPeriod('custom'); setRangeOpen(true); } else setPeriod(p); }}
           className={`rounded-full px-2.5 py-1.5 text-xs font-semibold transition-all sm:px-3 ${period === p ? 'bg-[#ffa950] text-[#573310] shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
         >
-          {p === 'today' ? 'Today' : p === 'custom' ? <span className="inline-flex items-center gap-1"><CalIcon />Custom</span> : p.toUpperCase()}
+          {p === 'today' ? 'Today' : p === 'custom' ? <span className="inline-flex items-center justify-center gap-1"><CalIcon /><span className="hidden sm:inline">Custom</span></span> : p.toUpperCase()}
         </button>
       ))}
     </div>
@@ -454,7 +454,7 @@ export default function Dashboard() {
                 <div className="mb-1 flex justify-end">
                   <button onClick={() => setNoteOpen(true)} title="Add a note on the chart" className="rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100">+ Note</button>
                 </div>
-                <div className="h-72 w-full flex-1 lg:min-h-[20rem]">
+                <div className="h-64 w-full sm:h-72 lg:h-[22rem]">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
@@ -1031,45 +1031,71 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#ffa950] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
           <button onClick={onClose} aria-label="Close" className="flex size-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"><CloseIcon /></button>
         </div>
-        <div className="overflow-auto">
+        <div className="overflow-y-auto">
           {detail ? (
-            <table className="w-full min-w-[34rem] table-fixed text-sm">
-              <colgroup>{detail.columns.map((c, i) => <col key={c} style={detail.widths?.[i] ? { width: detail.widths[i] } : undefined} />)}</colgroup>
-              <thead className="sticky top-0 bg-white dark:bg-[#131318]">
-                <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-400 dark:border-zinc-800">
-                  {detail.columns.map((c, i) => <th key={c} className={`px-4 py-2.5 font-semibold ${alignCls(detail.align?.[i])}`}>{c}</th>)}
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              {/* Desktop: table. */}
+              <table className="hidden w-full table-fixed text-sm sm:table">
+                <colgroup>{detail.columns.map((c, i) => <col key={c} style={detail.widths?.[i] ? { width: detail.widths[i] } : undefined} />)}</colgroup>
+                <thead className="sticky top-0 bg-white dark:bg-[#131318]">
+                  <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-400 dark:border-zinc-800">
+                    {detail.columns.map((c, i) => <th key={c} className={`px-4 py-2.5 font-semibold ${alignCls(detail.align?.[i])}`}>{c}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rowIdx.map((ri) => (
+                    <tr key={ri} className="border-b border-[var(--card-border)] last:border-0 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
+                      {detail.rows[ri].map((cell, ci) => <td key={ci} className={`truncate px-4 py-2.5 text-zinc-700 dark:text-zinc-200 ${alignCls(detail.align?.[ci])}`}>{cell}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {/* Mobile: each row as a stacked card, no horizontal scroll. */}
+              <div className="divide-y divide-[var(--card-border)] sm:hidden">
                 {rowIdx.map((ri) => (
-                  <tr key={ri} className="border-b border-[var(--card-border)] last:border-0 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
-                    {detail.rows[ri].map((cell, ci) => <td key={ci} className={`truncate px-4 py-2.5 text-zinc-700 dark:text-zinc-200 ${alignCls(detail.align?.[ci])}`}>{cell}</td>)}
-                  </tr>
+                  <div key={ri} className="px-4 py-3">
+                    <div className="min-w-0 text-sm font-medium text-zinc-800 dark:text-zinc-100">{detail.rows[ri][0]}</div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                      {detail.columns.slice(1).map((col, ci) => (
+                        <span key={col} className="text-xs text-zinc-500 dark:text-zinc-400">{col} <span className="font-semibold text-zinc-800 dark:text-zinc-100">{detail.rows[ri][ci + 1]}</span></span>
+                      ))}
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
-            <table className="w-full table-fixed text-sm">
-              <colgroup><col style={{ width: '3rem' }} /><col /><col style={{ width: '7rem' }} /><col style={{ width: '5rem' }} /></colgroup>
-              <thead className="sticky top-0 bg-white dark:bg-zinc-900">
-                <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-400 dark:border-zinc-800">
-                  <th className="px-4 py-2.5 text-left font-semibold">#</th>
-                  <th className="py-2.5 text-left font-semibold">Name</th>
-                  <th className="px-4 py-2.5 text-right font-semibold">{metric}</th>
-                  <th className="px-4 py-2.5 text-right font-semibold">%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it, i) => (
-                  <tr key={it.key} className="border-b border-[var(--card-border)] last:border-0 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
-                    <td className="px-4 py-2.5 tabular-nums text-zinc-400">{i + 1}</td>
-                    <td className="min-w-0 truncate py-2.5 text-zinc-700 dark:text-zinc-200"><span className="flex min-w-0 items-center gap-2">{it.left}</span></td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-medium text-zinc-800 dark:text-zinc-100">{fmt(it.value)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-zinc-400">{total > 0 ? Math.round((it.value / total) * 100) : 0}%</td>
+            <>
+              <table className="hidden w-full table-fixed text-sm sm:table">
+                <colgroup><col style={{ width: '3rem' }} /><col /><col style={{ width: '7rem' }} /><col style={{ width: '5rem' }} /></colgroup>
+                <thead className="sticky top-0 bg-white dark:bg-[#131318]">
+                  <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-400 dark:border-zinc-800">
+                    <th className="px-4 py-2.5 text-left font-semibold">#</th>
+                    <th className="py-2.5 text-left font-semibold">Name</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">{metric}</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">%</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {items.map((it, i) => (
+                    <tr key={it.key} className="border-b border-[var(--card-border)] last:border-0 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
+                      <td className="px-4 py-2.5 tabular-nums text-zinc-400">{i + 1}</td>
+                      <td className="min-w-0 truncate py-2.5 text-zinc-700 dark:text-zinc-200"><span className="flex min-w-0 items-center gap-2">{it.left}</span></td>
+                      <td className="px-4 py-2.5 text-right tabular-nums font-medium text-zinc-800 dark:text-zinc-100">{fmt(it.value)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-zinc-400">{total > 0 ? Math.round((it.value / total) * 100) : 0}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="divide-y divide-[var(--card-border)] sm:hidden">
+                {items.map((it, i) => (
+                  <div key={it.key} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                    <span className="flex min-w-0 items-center gap-2 text-zinc-700 dark:text-zinc-200"><span className="shrink-0 tabular-nums text-zinc-400">{i + 1}.</span>{it.left}</span>
+                    <span className="shrink-0 tabular-nums"><span className="font-semibold text-zinc-800 dark:text-zinc-100">{fmt(it.value)}</span> <span className="text-xs text-zinc-400">{total > 0 ? Math.round((it.value / total) * 100) : 0}%</span></span>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
       </div>
