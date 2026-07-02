@@ -484,7 +484,7 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen">
+    <div>
       {loading && (
         <div className="pointer-events-none fixed inset-x-0 top-0 z-[70] h-0.5 overflow-hidden">
           <div className="load-bar h-full w-1/3 rounded-full bg-[#ffa950]" />
@@ -724,8 +724,8 @@ function Logo() {
       </svg>
       <div className="flex flex-col leading-none">
         <span className="head text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Insight</span>
-        <span className="mt-1 self-end text-[9px] font-medium tracking-wide text-zinc-400 dark:text-zinc-500">
-          by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 transition-colors hover:text-[#ffa950] dark:text-zinc-400">Nicolas Lecocq</a>
+        <span className="-mt-1 ml-[1.65rem] font-[family-name:var(--font-sign)] text-sm italic leading-none text-zinc-400 dark:text-zinc-500">
+          by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 transition-colors hover:text-[#ffa950] dark:text-zinc-400">Nicolas&nbsp;Lecocq</a>
         </span>
       </div>
     </div>

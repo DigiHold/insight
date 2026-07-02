@@ -32,10 +32,8 @@ html {
   color-scheme: light dark;
 }
 
-/* overflow-x: clip (not hidden) avoids the intermittent iOS Safari bug where
-   overflow-x on <body> spawns a phantom scroll container with a huge blank gap
-   below the content. clip trims horizontal overflow without a scroll box. */
-html,
+/* overflow-x: clip (not hidden) trims horizontal overflow without turning the
+   body into a scroll container. Kept off <html> so iOS does not mis-measure it. */
 body {
   overflow-x: clip;
 }
@@ -44,7 +42,11 @@ body {
   background: var(--page-bg);
   color: #18181b;
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  /* dvh, not vh: on iOS Safari 100vh is the toolbar-hidden height, so a short
+     page pads out past the visible screen and leaves a huge blank gap below.
+     100dvh tracks the live viewport and removes that overshoot. */
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 @media (prefers-color-scheme: dark) {

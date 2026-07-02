@@ -55,7 +55,7 @@ export default function Login() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-5">
+    <main className="flex min-h-[100dvh] items-center justify-center px-5">
       <div className="card fade-up w-full max-w-sm p-8">
         <div className="mb-6 flex items-center gap-2.5">
           <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden>
@@ -66,8 +66,8 @@ export default function Login() {
           </svg>
           <div className="flex flex-col leading-none">
             <span className="head text-base font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Insight</span>
-            <span className="mt-1 self-end text-[9px] font-medium tracking-wide text-zinc-400 dark:text-zinc-500">
-              by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 transition-colors hover:text-[#ffa950] dark:text-zinc-400">Nicolas Lecocq</a>
+            <span className="-mt-1 ml-[1.65rem] font-[family-name:var(--font-sign)] text-sm italic leading-none text-zinc-400 dark:text-zinc-500">
+              by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 transition-colors hover:text-[#ffa950] dark:text-zinc-400">Nicolas&nbsp;Lecocq</a>
             </span>
           </div>
         </div>
