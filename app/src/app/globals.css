@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/* Le theme suit le systeme automatiquement (prefers-color-scheme). */
+:root {
+  --map-bg: #eef2f6;
+  --map-fill: #d3d9e0;
+  --map-stroke: #e7ebf0;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: #fafafa;
+  color: #18181b;
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --map-bg: #0c0c0e;
+    --map-fill: #26262b;
+    --map-stroke: #161619;
+  }
+  body {
+    background: #09090b;
+    color: #e5e5e5;
+  }
+}
+
+h1,
+h2,
+h3,
+.head {
+  font-family: var(--font-head), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.015em;
+}
+
+/* Curseur pointer sur tout ce qui est cliquable, et pas d'outline moche. */
+button:not(:disabled),
+[role="button"],
+summary,
+select,
+a {
+  cursor: pointer;
+}
+
+button:focus,
+a:focus,
+summary:focus,
+select:focus {
+  outline: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#ffa950] px-4 py-2 text-sm font-semibold text-[#573310] shadow-sm transition-all hover:bg-[#f5991f] hover:shadow active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-600 shadow-sm transition-all hover:border-zinc-300 hover:text-zinc-900 active:scale-[0.98] disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:text-zinc-50;
+  }
+  .field {
+    @apply w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 transition-colors focus:border-[#ffa950] focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100;
+  }
+  .card {
+    @apply rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50;
+  }
+}
+
+/* Popover Mapbox (carte visiteur): fond transparent, pas de fleche, croix discrete. */
+.insight-popup .mapboxgl-popup-content { padding: 0; background: transparent; box-shadow: none; border-radius: 0; }
+.insight-popup .mapboxgl-popup-tip { display: none; }
+.insight-popup .mapboxgl-popup-close-button { top: 6px; right: 8px; padding: 0 5px; font-size: 20px; line-height: 1; color: #a1a1aa; }
+.insight-popup .mapboxgl-popup-close-button:hover { background: transparent; color: #fff; }

@@ -1,0 +1,10 @@
+.env
+node_modules/
+.next/
+dist/
+*.log
+backups/
+geoip/*.mmdb
+app/.next/
+app/node_modules/
+.DS_Store
