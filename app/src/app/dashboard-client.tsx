@@ -53,9 +53,27 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 const TYPE_COLOR: Record<string, string> = { search: '#ffa950', social: '#10b981', ai: '#ec4899', referral: '#3b82f6', direct: '#94a3b8' };
 const CHANNEL_LABEL: Record<string, string> = { search: 'Organic search', social: 'Organic social', ai: 'AI', referral: 'Referral', direct: 'Direct' };
-const VENDOR_DOMAIN: Record<string, string> = {
-  openai: 'openai.com', anthropic: 'anthropic.com', perplexity: 'perplexity.ai', google: 'google.com',
-  xai: 'x.ai', bytedance: 'bytedance.com', amazon: 'amazon.com', apple: 'apple.com', commoncrawl: 'commoncrawl.org', meta: 'meta.com',
+// AI/crawler vendor -> local official SVG in /public/i (missing ones fall back to a globe).
+const VENDOR_ICON: Record<string, string> = {
+  openai: 'openai', anthropic: 'anthropic', perplexity: 'perplexity', google: 'google', gemini: 'gemini',
+  xai: 'x', bytedance: 'bytedance', amazon: 'amazon', apple: 'apple', meta: 'meta', duckduckgo: 'duckduckgo',
+};
+// Known referrer hostnames -> local official SVG. Unknown hosts use the proxy.
+const DOMAIN_ICON: Record<string, string> = {
+  'google.com': 'google', 'www.google.com': 'google', 'news.google.com': 'google',
+  'duckduckgo.com': 'duckduckgo', 'brave.com': 'brave', 'search.brave.com': 'brave',
+  'ecosia.org': 'ecosia', 'www.ecosia.org': 'ecosia', 'qwant.com': 'qwant',
+  'linkedin.com': 'linkedin', 'www.linkedin.com': 'linkedin', 'lnkd.in': 'linkedin',
+  'x.com': 'x', 'twitter.com': 'x', 't.co': 'x',
+  'facebook.com': 'facebook', 'www.facebook.com': 'facebook', 'm.facebook.com': 'facebook', 'l.facebook.com': 'facebook',
+  'reddit.com': 'reddit', 'www.reddit.com': 'reddit', 'out.reddit.com': 'reddit',
+  'instagram.com': 'instagram', 'l.instagram.com': 'instagram',
+  'youtube.com': 'youtube', 'www.youtube.com': 'youtube', 'youtu.be': 'youtube',
+  'tiktok.com': 'tiktok', 'www.tiktok.com': 'tiktok', 'threads.net': 'threads', 'www.threads.net': 'threads',
+  'openai.com': 'openai', 'chatgpt.com': 'openai', 'chat.openai.com': 'openai',
+  'perplexity.ai': 'perplexity', 'www.perplexity.ai': 'perplexity',
+  'claude.ai': 'anthropic', 'anthropic.com': 'anthropic', 'gemini.google.com': 'gemini',
+  'amazon.com': 'amazon', 'apple.com': 'apple', 'meta.com': 'meta',
 };
 // Pale background per vendor for the crawler icon square (each brand has its own tint).
 const VENDOR_TINT: Record<string, string> = {
@@ -71,7 +89,7 @@ const VENDOR_TINT: Record<string, string> = {
   meta: 'bg-indigo-100 dark:bg-indigo-500/20',
 };
 const vendorTint = (v: string): string => VENDOR_TINT[v] ?? 'bg-zinc-100 dark:bg-zinc-800';
-const OS_SLUG: Record<string, string> = { macos: 'apple', macintosh: 'apple', ios: 'apple', android: 'android', linux: 'linux', ubuntu: 'ubuntu', 'chrome os': 'googlechrome', chromeos: 'googlechrome' };
+const OS_SLUG: Record<string, string> = { macos: 'apple', macintosh: 'apple', ios: 'apple', android: 'android', linux: 'linux', ubuntu: 'ubuntu', 'chrome os': 'chrome', chromeos: 'chrome' };
 const BROWSER_LOGO: Record<string, string> = { chrome: 'chrome', safari: 'safari', firefox: 'firefox', edge: 'edge', opera: 'opera', brave: 'brave' };
 
 const cap = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -312,7 +330,7 @@ export default function Dashboard() {
     filter: keywords.map((k) => k.query),
     logo: <GscLogo />,
     rows: keywords.map((k) => [
-      <span key="q" className="flex min-w-0 items-center gap-2"><img src="https://icons.duckduckgo.com/ip3/google.com.ico" alt="" width={16} height={16} className="size-4 shrink-0 rounded" onError={hideBroken} /><span className="truncate" title={k.query}>{k.query}</span></span>,
+      <span key="q" className="flex min-w-0 items-center gap-2"><img src="/i/google.svg" alt="" width={16} height={16} className="size-4 shrink-0" /><span className="truncate" title={k.query}>{k.query}</span></span>,
       posLabel(k.position),
       fmt(k.impressions),
       fmt(k.clicks),
@@ -779,7 +797,7 @@ function FeedCard({ siteId }: { siteId: string }) {
         {feed.map((f, i) => (
           <div key={`${f.ts}-${i}`} className="flex items-center gap-2.5 border-b border-[var(--card-border)] py-2 text-sm last:border-0">
             {f.country
-              ? <img src={`https://purecatamphetamine.github.io/country-flag-icons/3x2/${f.country.toUpperCase()}.svg`} alt="" width={18} height={13} className="h-[13px] w-[18px] shrink-0 rounded-[2px] object-cover" onError={hideBroken} />
+              ? <img src={`/flags/${f.country.toUpperCase()}.svg`} alt="" width={18} height={13} className="h-[13px] w-[18px] shrink-0 rounded-[2px] object-cover" onError={hideBroken} />
               : <span className="w-[18px] shrink-0" />}
             <span className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-700 dark:text-zinc-200" title={f.path}>{f.path}</span>
             <span className="shrink-0 truncate text-[11px] text-zinc-400 dark:text-zinc-500">{SOURCE_LABEL[f.source] ?? cap(f.source)}</span>
@@ -1219,7 +1237,7 @@ function BotBadge({ vendor, size = 'md' }: { vendor: string; size?: 'md' | 'sm' 
   const img = size === 'sm' ? 14 : 16;
   return (
     <span className={`flex ${box} shrink-0 items-center justify-center rounded-md ${vendorTint(vendor)}`}>
-      <img src={`https://icons.duckduckgo.com/ip3/${VENDOR_DOMAIN[vendor] ?? 'google.com'}.ico`} alt="" width={img} height={img} style={{ width: img, height: img }} referrerPolicy="no-referrer" onError={hideBroken} />
+      <BrandSvg name={VENDOR_ICON[vendor] ?? ''} size={img} className="" />
     </span>
   );
 }
@@ -1286,8 +1304,8 @@ function MenuItem({ children, onClick, danger, icon }: { children: ReactNode; on
 const CodeIcon = () => <Ico><path d="m16 18 6-6-6-6" /><path d="m8 6-6 6 6 6" /></Ico>;
 const LinkIcon = () => <Ico><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></Ico>;
 const TrashIcon = () => <Ico><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></Ico>;
-const StripeIcon = () => <img src="https://cdn.simpleicons.org/stripe/635BFF" alt="" width={16} height={16} className="size-4" onError={hideBroken} />;
-const GaIcon = () => <img src="https://cdn.simpleicons.org/googleanalytics/E37400" alt="" width={16} height={16} className="size-4" onError={hideBroken} />;
+const StripeIcon = () => <BrandSvg name="stripe" />;
+const GaIcon = () => <BrandSvg name="googleanalytics" />;
 const SignalIcon = () => <Ico><path d="M2 20h.01" /><path d="M7 20v-4" /><path d="M12 20v-8" /><path d="M17 20V8" /><path d="M22 4v16" /></Ico>;
 const FileIcon = () => <Ico><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /></Ico>;
 const ChipIcon = () => <Ico><rect width="16" height="16" x="4" y="4" rx="2" /><rect width="6" height="6" x="9" y="9" rx="1" /><path d="M15 2v2" /><path d="M15 20v2" /><path d="M2 15h2" /><path d="M2 9h2" /><path d="M20 15h2" /><path d="M20 9h2" /><path d="M9 2v2" /><path d="M9 20v2" /></Ico>;
@@ -1419,20 +1437,31 @@ function CheckMark() {
   return <svg className="size-3.5 shrink-0 text-[#ffa950]" viewBox="0 0 16 16" fill="none" aria-hidden><path d="M3.5 8.5l3 3 6-6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 
-function BrandImg({ slug }: { slug: string }) {
-  return <img src={`https://cdn.simpleicons.org/${slug}`} alt="" width={16} height={16} className="size-4 shrink-0" onError={hideBroken} />;
+// Official brand SVG served locally from /public/i, with a neutral-globe
+// fallback for brands not yet bundled.
+function BrandSvg({ name, size = 16, className = 'size-4 shrink-0' }: { name: string; size?: number; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  if (!name || broken) return <GlobeSmall />;
+  return <img src={`/i/${name}.svg`} alt="" width={size} height={size} style={{ width: size, height: size }} className={className} onError={() => setBroken(true)} />;
+}
+// Referrer favicon: known brands use the local SVG; any other host is proxied
+// and cached on the VPS (SVG first), so the browser never hits a third party.
+function DomainIcon({ domain }: { domain: string }) {
+  const [broken, setBroken] = useState(false);
+  const slug = DOMAIN_ICON[domain];
+  if (slug) return <BrandSvg name={slug} className="size-4 shrink-0 rounded" />;
+  if (!domain || broken) return <GlobeSmall />;
+  return <img src={`/api/icon?d=${encodeURIComponent(domain)}`} alt="" width={16} height={16} className="size-4 shrink-0 rounded object-contain" onError={() => setBroken(true)} />;
 }
 function osIcon(name: string): ReactNode {
   const s = name.toLowerCase();
   if (s === 'windows') return <WindowsIcon />;
   const slug = OS_SLUG[s];
-  return slug ? <BrandImg slug={slug} /> : <span className="size-4 shrink-0" />;
+  return slug ? <BrandSvg name={slug} /> : <span className="size-4 shrink-0" />;
 }
 function browserIcon(name: string): ReactNode {
   const slug = BROWSER_LOGO[name.toLowerCase()];
-  return slug
-    ? <img src={`https://cdnjs.cloudflare.com/ajax/libs/browser-logos/74.1.0/${slug}/${slug}_64x64.png`} alt="" width={16} height={16} className="size-4 shrink-0" onError={hideBroken} />
-    : <GlobeSmall />;
+  return slug ? <BrandSvg name={slug} /> : <GlobeSmall />;
 }
 function deviceIcon(name: string): ReactNode {
   const s = name.toLowerCase();
@@ -1455,9 +1484,7 @@ function SiteFavicon({ id, url }: { id: string; url: string }) {
 function Favicon({ domain, label }: { domain: string; label: string }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
-      {domain
-        ? <img src={`https://icons.duckduckgo.com/ip3/${domain}.ico`} alt="" width={16} height={16} className="size-4 shrink-0 rounded" referrerPolicy="no-referrer" onError={hideBroken} />
-        : <span className="size-4 shrink-0" />}
+      <DomainIcon domain={domain} />
       <span className="truncate">{label}</span>
     </span>
   );
@@ -1466,7 +1493,7 @@ function Favicon({ domain, label }: { domain: string; label: string }) {
 function Flag({ code }: { code: string }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <img src={`https://purecatamphetamine.github.io/country-flag-icons/3x2/${code.toUpperCase()}.svg`} alt="" width={20} height={14} className="h-[14px] w-[20px] shrink-0 rounded-[2px] object-cover shadow-sm" onError={hideBroken} />
+      <img src={`/flags/${code.toUpperCase()}.svg`} alt="" width={20} height={14} className="h-[14px] w-[20px] shrink-0 rounded-[2px] object-cover shadow-sm" onError={hideBroken} />
       <span className="truncate">{countryName(code)}</span>
     </span>
   );

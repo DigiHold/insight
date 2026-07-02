@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { CENTROIDS } from '@/lib/geo-centroids';
+import { createAvatar } from '@dicebear/core';
+import { adventurer } from '@dicebear/collection';
 
 // The map uses Mapbox: a 3D globe with native atmosphere and stars, plus a flat 2D version.
 // The public token (URL-restricted) is read at runtime via /api/config.
@@ -36,7 +38,16 @@ try { regionNames = new Intl.DisplayNames(['en'], { type: 'region' }); } catch {
 const countryName = (c: string): string => { try { return regionNames?.of(c.toUpperCase()) ?? c; } catch { return c; } };
 const fmtDur = (s: number): string => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
 
-const avatar = (id: string): string => `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(id)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf&radius=50`;
+// Visitor avatars are generated locally (DiceBear, no network) as data URIs.
+const avatarCache = new Map<string, string>();
+const avatar = (id: string): string => {
+  let uri = avatarCache.get(id);
+  if (!uri) {
+    uri = createAvatar(adventurer, { seed: id, backgroundColor: ['b6e3f4', 'c0aede', 'd1d4f9', 'ffd5dc', 'ffdfbf'], radius: 50 }).toDataUri();
+    avatarCache.set(id, uri);
+  }
+  return uri;
+};
 
 // Avatar size based on zoom: floor at 40px so it stays clearly visible everywhere.
 const sizeForZoom = (z: number): number => Math.round(Math.max(40, Math.min(52, 60 - z * 3)));
@@ -52,20 +63,20 @@ function setMarkerSize(el: HTMLElement, size: number): void {
 // The popover is a native Mapbox Popup (it follows the avatar and disappears behind the globe). Its
 // content is HTML, with icons (flag, OS, device, browser, referrer favicon).
 const BROWSER_LOGO: Record<string, string> = { chrome: 'chrome', safari: 'safari', firefox: 'firefox', edge: 'edge', opera: 'opera', brave: 'brave' };
-const OS_SLUG: Record<string, string> = { macos: 'apple', macintosh: 'apple', ios: 'apple', android: 'android', linux: 'linux', ubuntu: 'ubuntu', 'chrome os': 'googlechrome', chromeos: 'googlechrome' };
+const OS_SLUG: Record<string, string> = { macos: 'apple', macintosh: 'apple', ios: 'apple', android: 'android', linux: 'linux', ubuntu: 'ubuntu', 'chrome os': 'chrome', chromeos: 'chrome' };
 const hostOf = (u: string): string => { try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname; } catch { return ''; } };
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => String(s ?? '').replace(/[&<>"]/g, (c) => ESC[c]);
 const imgHTML = (src: string, style: string): string => `<img src="${src}" style="${style}" onerror="this.style.visibility='hidden'"/>`;
 const S16 = 'width:16px;height:16px;object-fit:contain;flex:none';
-const flagHTML = (code: string): string => (code ? imgHTML(`https://purecatamphetamine.github.io/country-flag-icons/3x2/${code.toUpperCase()}.svg`, 'width:20px;height:14px;border-radius:2px;object-fit:cover;flex:none') : '<span style="width:20px"></span>');
-const browserHTML = (name: string): string => { const s = BROWSER_LOGO[name.toLowerCase()]; return s ? imgHTML(`https://cdnjs.cloudflare.com/ajax/libs/browser-logos/74.1.0/${s}/${s}_64x64.png`, S16) : '<span style="width:16px"></span>'; };
+const flagHTML = (code: string): string => (code ? imgHTML(`/flags/${code.toUpperCase()}.svg`, 'width:20px;height:14px;border-radius:2px;object-fit:cover;flex:none') : '<span style="width:20px"></span>');
+const browserHTML = (name: string): string => { const s = BROWSER_LOGO[name.toLowerCase()]; return s ? imgHTML(`/i/${s}.svg`, S16) : '<span style="width:16px"></span>'; };
 const osHTML = (name: string): string => {
   const s = name.toLowerCase();
   if (s === 'windows') return `<svg width="16" height="16" viewBox="0 0 24 24" fill="#f4f4f5" style="${S16}"><path d="M3 5.6 10.2 4.6v6.9H3zM11.2 4.5 21 3.2v8.3h-9.8zM3 12.5h7.2v6.9L3 18.4zM11.2 12.5H21v8.3l-9.8-1.3z"/></svg>`;
   const slug = OS_SLUG[s];
-  return slug ? imgHTML(`https://cdn.simpleicons.org/${slug}/f4f4f5`, S16) : '<span style="width:16px"></span>';
+  return slug ? imgHTML(`/i/${slug}.svg`, S16) : '<span style="width:16px"></span>';
 };
 const deviceHTML = (name: string): string => {
   const s = name.toLowerCase();
@@ -80,7 +91,7 @@ const KROW = 'display:flex;justify-content:space-between;gap:12px';
 // HTML for the visitor card (no avatar: the avatar is already the marker).
 function cardHTML(v: Visitor): string {
   const ref = v.source && v.source !== 'direct'
-    ? `${imgHTML(`https://www.google.com/s2/favicons?domain=${hostOf(v.source)}&sz=64`, 'width:16px;height:16px;border-radius:3px;flex:none')}<span style="${TRUNC}">${esc(v.source)}</span>`
+    ? `${imgHTML(`/api/icon?d=${encodeURIComponent(hostOf(v.source))}`, 'width:16px;height:16px;border-radius:3px;flex:none')}<span style="${TRUNC}">${esc(v.source)}</span>`
     : 'Direct';
   const pages = v.pages.length
     ? `<div style="border-top:1px solid rgba(255,255,255,.1);padding:12px 16px"><p style="font-size:12px;font-weight:600;color:#a1a1aa;margin:0 0 6px">Pages visited</p><div style="max-height:150px;overflow:auto;display:flex;flex-direction:column;gap:2px">${v.pages.map((p) => `<p style="font-family:monospace;font-size:12px;color:#d4d4d8;margin:0;${TRUNC}">${esc(p || '/')}</p>`).join('')}</div></div>`
@@ -258,7 +269,7 @@ export function GlobeModal({ site, onClose }: { site: string; onClose: () => voi
               <div className="mt-2 flex max-w-sm flex-wrap gap-1">
                 {data.countries.slice(0, 8).map((c) => (
                   <span key={c.country} className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-xs text-zinc-200">
-                    <img src={`https://purecatamphetamine.github.io/country-flag-icons/3x2/${c.country.toUpperCase()}.svg`} alt="" className="h-3.5 w-5 rounded-[2px] object-cover shadow-sm" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
+                    <img src={`/flags/${c.country.toUpperCase()}.svg`} alt="" className="h-3.5 w-5 rounded-[2px] object-cover shadow-sm" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
                     {countryName(c.country)} {c.count}
                   </span>
                 ))}
