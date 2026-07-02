@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
 import dynamic from 'next/dynamic';
 
@@ -22,7 +23,7 @@ interface Stats {
   devices: Row[];
   browsers: Row[];
   os: Row[];
-  series: { t: string; count: number; revenue?: number }[];
+  series: { t: string; count: number; revenue?: number; refunds?: number }[];
   ai: AiBot[];
   aiSeries?: Record<string, number | string>[];
   aiBots?: string[];
@@ -151,10 +152,10 @@ const plainItems = (rows: Row[], color: string, transform?: (s: string) => strin
   rows.map((r) => ({ key: r.name || '—', left: <span className="truncate">{(transform ?? ((s) => s || '/'))(r.name)}</span>, value: r.count, color }));
 
 type Modal = null | { type: 'add' } | { type: 'script'; site: SiteItem } | { type: 'stripe'; site: SiteItem } | { type: 'ga4'; site: SiteItem } | { type: 'url'; site: SiteItem } | { type: 'delete'; site: SiteItem };
-type Period = 'today' | '7d' | '30d' | '90d';
+type Period = 'today' | '7d' | '30d' | '90d' | 'custom';
 
 
-const PERIODS: Period[] = ['today', '7d', '30d', '90d'];
+const PERIODS: Period[] = ['today', '7d', '30d', '90d', 'custom'];
 
 export default function Dashboard() {
   const [sites, setSites] = useState<SiteItem[]>([]);
@@ -168,8 +169,21 @@ export default function Dashboard() {
   });
   const site = sites.find((s) => s.id === siteId);
 
+  // Custom date range (used when period === 'custom'), persisted locally.
+  const [range, setRange] = useState<{ from: string; to: string }>(() => {
+    if (typeof window !== 'undefined') {
+      try { const r = JSON.parse(localStorage.getItem('insight_range') ?? ''); if (r?.from && r?.to) return r; } catch { /* defaults below */ }
+    }
+    const to = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+    return { from, to };
+  });
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => { if (siteId) localStorage.setItem('insight_site', siteId); }, [siteId]);
   useEffect(() => { localStorage.setItem('insight_period', period); }, [period]);
+  useEffect(() => { localStorage.setItem('insight_range', JSON.stringify(range)); }, [range]);
 
   const loadSites = useCallback(async () => {
     const res = await fetch('/api/sites', { cache: 'no-store' });
@@ -179,13 +193,14 @@ export default function Dashboard() {
     setSiteId((cur) => (cur && list.some((s) => s.id === cur) ? cur : list[0]?.id ?? ''));
   }, []);
 
+  const rangeQS = period === 'custom' ? `&from=${range.from}&to=${range.to}` : '';
   const loadStats = useCallback(async (id: string) => {
     if (!id) { setData(null); return; }
     try {
-      const res = await fetch(`/api/stats?site=${encodeURIComponent(id)}&period=${period}`, { cache: 'no-store' });
+      const res = await fetch(`/api/stats?site=${encodeURIComponent(id)}&period=${period}${rangeQS}`, { cache: 'no-store' });
       if (res.ok) setData((await res.json()) as Stats);
     } catch { /* ignore */ }
-  }, [period]);
+  }, [period, rangeQS]);
 
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [keywordError, setKeywordError] = useState<string | null>(null);
@@ -195,22 +210,23 @@ export default function Dashboard() {
 
   useEffect(() => { loadSites(); }, [loadSites]);
   useEffect(() => {
-    loadStats(siteId);
+    setLoading(true);
+    loadStats(siteId).finally(() => setLoading(false));
     const t = setInterval(() => loadStats(siteId), 5000);
     return () => clearInterval(t);
   }, [siteId, loadStats]);
   useEffect(() => {
     if (!siteId) { setKeywords([]); return; }
     let active = true;
-    fetch(`/api/gsc?site=${encodeURIComponent(siteId)}&period=${period}`, { cache: 'no-store' })
+    fetch(`/api/gsc?site=${encodeURIComponent(siteId)}&period=${period}${period === 'custom' ? `&from=${range.from}&to=${range.to}` : ''}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { keywords: [], error: null, tried: [] }))
       .then((j) => { if (active) { setKeywords((j.keywords ?? []) as Keyword[]); setKeywordError(j.error ?? null); setKeywordTried((j.tried ?? []) as string[]); } })
       .catch(() => { if (active) { setKeywords([]); setKeywordError(null); setKeywordTried([]); } });
     return () => { active = false; };
-  }, [siteId, period]);
+  }, [siteId, period, range]);
 
-  const chartData = (data?.series ?? []).map((p) => ({ h: p.t, v: p.count, r: p.revenue ?? 0 }));
-  const hasRevenue = chartData.some((d) => d.r > 0);
+  const chartData = (data?.series ?? []).map((p) => ({ h: p.t, v: p.count, r: p.revenue ?? 0, rf: p.refunds ?? 0 }));
+  const hasRevenue = chartData.some((d) => d.r > 0 || d.rf > 0);
   const currency = data?.revenue?.currency ?? 'usd';
   const metrics = buildMetrics(data);
   // The hero shows Visitors huge; the other metrics become compact chips.
@@ -218,7 +234,12 @@ export default function Dashboard() {
   const hero = metrics.find((m) => m.label === 'Visitors');
   const chips = metrics.filter((m) => !m.live && m.label !== 'Visitors');
   const online = data?.online ?? 0;
-  const periodTag = period === 'today' ? 'Today' : period === '7d' ? 'Last 7 days' : period === '30d' ? 'Last 30 days' : 'Last 90 days';
+  const fmtDay = (d: string): string => { const p = parseKey(d); return p ? `${p.getDate()} ${MONTHS[p.getMonth()]}` : d; };
+  const periodTag = period === 'today' ? 'Today'
+    : period === '7d' ? 'Last 7 days'
+    : period === '30d' ? 'Last 30 days'
+    : period === '90d' ? 'Last 90 days'
+    : `${fmtDay(range.from)} – ${fmtDay(range.to)}`;
 
   const channelItems: Item[] = (data?.channels ?? []).map((s) => ({
     key: s.name,
@@ -316,14 +337,14 @@ export default function Dashboard() {
   );
 
   const periodPills = (grow: boolean) => sites.length > 0 && (
-    <div className={`${grow ? 'grid w-full grid-cols-4' : 'flex'} rounded-full border border-[var(--card-border)] bg-[var(--card-bg)] p-1 backdrop-blur-xl`}>
-      {(['today', '7d', '30d', '90d'] as Period[]).map((p) => (
+    <div className={`${grow ? 'grid w-full grid-cols-5' : 'flex'} rounded-full border border-[var(--card-border)] bg-[var(--card-bg)] p-1 backdrop-blur-xl`}>
+      {(['today', '7d', '30d', '90d', 'custom'] as Period[]).map((p) => (
         <button
           key={p}
-          onClick={() => setPeriod(p)}
-          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${period === p ? 'bg-[#ffa950] text-[#573310] shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
+          onClick={() => { if (p === 'custom') { setPeriod('custom'); setRangeOpen(true); } else setPeriod(p); }}
+          className={`rounded-full px-2.5 py-1.5 text-xs font-semibold transition-all sm:px-3 ${period === p ? 'bg-[#ffa950] text-[#573310] shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}`}
         >
-          {p === 'today' ? 'Today' : p.toUpperCase()}
+          {p === 'today' ? 'Today' : p === 'custom' ? 'Custom' : p.toUpperCase()}
         </button>
       ))}
     </div>
@@ -331,6 +352,11 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
+      {loading && (
+        <div className="pointer-events-none fixed inset-x-0 top-0 z-[70] h-0.5 overflow-hidden">
+          <div className="load-bar h-full w-1/3 rounded-full bg-[#ffa950]" />
+        </div>
+      )}
       <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
           <header className="fade-up relative z-40 mb-6">
             {/* Mobile: three stacked rows — identity, site tools, period. */}
@@ -344,9 +370,9 @@ export default function Dashboard() {
               </div>
               {sites.length > 0 && (
                 <div className="flex items-center gap-1.5">
-                  <div className="min-w-0 flex-1">{siteDropdown(true)}</div>
+                  <div className="min-w-0">{siteDropdown(false)}</div>
                   {siteMenu}
-                  <button onClick={() => setModal({ type: 'add' })} aria-label="Add site" className="btn-primary shrink-0 px-3"><PlusIcon /></button>
+                  <button onClick={() => setModal({ type: 'add' })} aria-label="Add site" className="btn-primary ml-auto shrink-0 px-3"><PlusIcon /></button>
                 </div>
               )}
               {periodPills(true)}
@@ -371,7 +397,7 @@ export default function Dashboard() {
         {sites.length === 0 ? (
           <Onboarding onAdd={() => setModal({ type: 'add' })} />
         ) : (
-          <>
+          <div className={`transition-opacity duration-300 ${loading ? 'pointer-events-none opacity-50' : ''}`}>
             <section className="fade-up mb-4 grid gap-4 lg:grid-cols-[280px_1fr]" style={{ animationDelay: '80ms' }}>
               <div className="card relative z-10 flex flex-col p-6">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">{periodTag}</p>
@@ -395,6 +421,7 @@ export default function Dashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
                       data={chartData}
+                      barCategoryGap="28%"
                       margin={{ top: 10, right: 8, bottom: 0, left: 6 }}
                       onMouseMove={(s: { isTooltipActive?: boolean; activeTooltipIndex?: number }) => { setChartHover(!!s?.isTooltipActive); setActiveIdx(typeof s?.activeTooltipIndex === 'number' ? s.activeTooltipIndex : null); }}
                       onMouseLeave={() => { setChartHover(false); setActiveIdx(null); }}
@@ -411,9 +438,12 @@ export default function Dashboard() {
                       {hasRevenue && <YAxis yAxisId="r" orientation="right" tickLine={false} axisLine={false} tick={{ fill: '#a1a1aa', fontSize: 11 }} width={54} tickFormatter={(v: number) => fmtMoney(v, currency)} />}
                       <Tooltip cursor={{ stroke: 'rgba(130,130,140,.55)', strokeWidth: 1 }} content={<ChartTooltip currency={currency} hasRevenue={hasRevenue} />} />
                       {hasRevenue && (
-                        <Bar yAxisId="r" dataKey="r" radius={[4, 4, 0, 0]} maxBarSize={22} isAnimationActive={false}>
-                          {chartData.map((_, i) => <Cell key={i} fill="#ffa950" fillOpacity={activeIdx === null ? 0.9 : i === activeIdx ? 1 : 0.25} />)}
+                        <Bar yAxisId="r" dataKey="r" stackId="rev" radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false}>
+                          {chartData.map((_, i) => <Cell key={i} fill="#ffa950" fillOpacity={activeIdx === null ? 0.92 : i === activeIdx ? 1 : 0.3} />)}
                         </Bar>
+                      )}
+                      {hasRevenue && (
+                        <Bar yAxisId="r" dataKey="rf" stackId="rev" radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false} fill="#ffa950" fillOpacity={0.18} stroke="#ffa950" strokeWidth={1} strokeDasharray="3 3" strokeOpacity={0.7} />
                       )}
                       <Area yAxisId="v" type="monotone" dataKey="v" stroke="#3b82f6" strokeWidth={2.5} fill="url(#fillv)" isAnimationActive={false} fillOpacity={chartHover ? 0.5 : 1} activeDot={{ r: 5, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }} />
                     </ComposedChart>
@@ -449,7 +479,7 @@ export default function Dashboard() {
               </div>
               <div id="ai-panel" className="fade-up scroll-mt-6 md:col-span-2" style={{ animationDelay: '400ms' }}><AiCard data={data} period={period} /></div>
             </section>
-          </>
+          </div>
         )}
 
         <footer className="mt-10 text-center text-xs text-zinc-400 dark:text-zinc-600">Insight — private, real-time analytics. Updates every 5 seconds.</footer>
@@ -475,6 +505,13 @@ export default function Dashboard() {
           </div>
         </Overlay>
       )}
+      {rangeOpen && (
+        <RangeModal
+          initial={range}
+          onClose={() => setRangeOpen(false)}
+          onApply={(r) => { setRange(r); setPeriod('custom'); setRangeOpen(false); }}
+        />
+      )}
       {globeOpen && <GlobeModal site={siteId} onClose={() => setGlobeOpen(false)} />}
     </div>
   );
@@ -498,6 +535,7 @@ function ChartTooltip({ active, payload, label, currency, hasRevenue }: TooltipP
   if (!active || !payload || !payload.length) return null;
   const v = Number(payload.find((p) => p.dataKey === 'v')?.value ?? 0);
   const r = Number(payload.find((p) => p.dataKey === 'r')?.value ?? 0);
+  const rf = Number(payload.find((p) => p.dataKey === 'rf')?.value ?? 0);
   const key = String(label ?? '');
   const rel = relDays(key);
   return (
@@ -508,6 +546,7 @@ function ChartTooltip({ active, payload, label, currency, hasRevenue }: TooltipP
       </div>
       <div className="flex items-center justify-between gap-8"><span className="flex items-center gap-1.5 text-zinc-400"><span className="size-2 rounded-full bg-[#3b82f6]" />Visitors</span><span className="font-semibold tabular-nums text-zinc-50">{fmt(v)}</span></div>
       {hasRevenue && <div className="mt-1 flex items-center justify-between gap-8"><span className="flex items-center gap-1.5 text-zinc-400"><span className="size-2 rounded-full bg-[#ffa950]" />Revenue</span><span className="font-semibold tabular-nums text-[#ffa950]">{fmtMoney(r, currency, 2)}</span></div>}
+      {rf > 0 && <div className="mt-1 flex items-center justify-between gap-8"><span className="flex items-center gap-1.5 text-zinc-400"><span className="size-2 rounded-sm border border-dashed border-[#ffa950] bg-[#ffa950]/20" />Refunds</span><span className="font-semibold tabular-nums text-zinc-300">−{fmtMoney(rf, currency, 2)}</span></div>}
     </div>
   );
 }
@@ -565,6 +604,7 @@ function TabbedCard({ title, icon, tabs, emptyNote, metric = 'Visitors' }: { tit
   const idx = Math.min(active, tabs.length - 1);
   const tab = tabs[idx];
   const total = tab.items.reduce((a, b) => a + b.value, 0);
+  const max = tab.items[0]?.value ?? 1;
   const shown = tab.items.slice(0, 10);
   const note = tab.emptyNote ?? emptyNote;
   const hasData = tab.detail ? tab.detail.rows.length > 0 : tab.items.length > 0;
@@ -586,16 +626,19 @@ function TabbedCard({ title, icon, tabs, emptyNote, metric = 'Visitors' }: { tit
       </div>
 
       {tabs.length > 1 && (
-        <div className="tabs-scroll mt-3 flex gap-4 overflow-x-auto border-b border-[var(--card-border)]">
-          {tabs.map((t, i) => (
-            <button
-              key={t.label}
-              onClick={() => setActive(i)}
-              className={`-mb-px shrink-0 border-b-2 pb-2 text-xs font-semibold transition-colors ${i === idx ? 'border-[#ffa950] text-zinc-900 dark:text-zinc-50' : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'}`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="mt-3 flex items-center justify-between gap-3 border-b border-[var(--card-border)]">
+          <div className="tabs-scroll flex gap-4 overflow-x-auto">
+            {tabs.map((t, i) => (
+              <button
+                key={t.label}
+                onClick={() => setActive(i)}
+                className={`-mb-px shrink-0 border-b-2 pb-2 text-xs font-semibold transition-colors ${i === idx ? 'border-[#ffa950] text-zinc-900 dark:text-zinc-50' : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <span className="shrink-0 pb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{metric}</span>
         </div>
       )}
 
@@ -604,7 +647,7 @@ function TabbedCard({ title, icon, tabs, emptyNote, metric = 'Visitors' }: { tit
           <RaceBar items={tab.items} total={total} />
         ) : (
           <div>
-            {shown.map((it) => <TrackRow key={it.key} left={it.left} value={it.value} total={total} color={it.color} />)}
+            {shown.map((it) => <TrackRow key={it.key} left={it.left} value={it.value} max={max} color={it.color} />)}
             {tab.items.length === 0 && <p className="px-2 py-8 text-center text-sm text-zinc-400 dark:text-zinc-600">{note ?? 'No data yet.'}</p>}
           </div>
         )}
@@ -614,17 +657,15 @@ function TabbedCard({ title, icon, tabs, emptyNote, metric = 'Visitors' }: { tit
   );
 }
 
-// One list row: label and value on top, a thin gradient progress track below.
-function TrackRow({ left, value, total, color }: { left: ReactNode; value: number; total: number; color: string }) {
-  const share = total > 0 ? Math.round((value / total) * 100) : 0;
-  const pct = Math.max(2, share);
+// One list row: label and count on top, a thin gradient progress track below
+// (width relative to the top item, so ranking reads at a glance).
+function TrackRow({ left, value, max, color }: { left: ReactNode; value: number; max: number; color: string }) {
+  const pct = Math.max(2, Math.round((value / Math.max(1, max)) * 100));
   return (
     <div className="py-[7px]">
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="min-w-0 truncate text-zinc-700 dark:text-zinc-200">{left}</span>
-        <span className="shrink-0 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">
-          {fmt(value)} <span className="ml-0.5 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">{share}%</span>
-        </span>
+        <span className="shrink-0 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">{fmt(value)}</span>
       </div>
       <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
         <span className="block h-full rounded-full transition-[width] duration-500" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 40%, transparent))` }} />
@@ -646,9 +687,7 @@ function RaceBar({ items, total }: { items: Item[]; total: number }) {
         {items.map((it) => (
           <div key={it.key} className="flex items-center justify-between gap-3 text-sm">
             <span className="flex min-w-0 items-center gap-2 truncate text-zinc-700 dark:text-zinc-200">{it.left}</span>
-            <span className="shrink-0 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">
-              {fmt(it.value)} <span className="ml-0.5 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">{total > 0 ? Math.round((it.value / total) * 100) : 0}%</span>
-            </span>
+            <span className="shrink-0 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">{fmt(it.value)}</span>
           </div>
         ))}
       </div>
@@ -672,7 +711,8 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
   const rowIdx = detail ? detail.rows.map((_, i) => i).filter((i) => !query || (detail.filter?.[i] ?? '').toLowerCase().includes(query)) : [];
   const items = tab.items.filter((it) => !query || it.key.toLowerCase().includes(query));
 
-  return (
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="relative flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700/80 dark:bg-[#131318]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-4 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
@@ -722,7 +762,8 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -933,7 +974,8 @@ function Onboarding({ onAdd }: { onAdd: () => void }) {
 }
 
 function Overlay({ children, onClose }: { children: ReactNode; onClose: () => void }) {
-  return (
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-700/80 dark:bg-[#131318]" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close" className="absolute right-3.5 top-3.5 flex size-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
@@ -941,7 +983,8 @@ function Overlay({ children, onClose }: { children: ReactNode; onClose: () => vo
         </button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1123,6 +1166,42 @@ function Snippet({ id }: { id: string }) {
   );
 }
 
+
+function RangeModal({ initial, onApply, onClose }: { initial: { from: string; to: string }; onApply: (r: { from: string; to: string }) => void; onClose: () => void }) {
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
+  const today = new Date().toISOString().slice(0, 10);
+  const valid = !!from && !!to && from <= to && to <= today;
+  const preset = (days: number) => {
+    setTo(new Date(Date.now() - 86400000).toISOString().slice(0, 10));
+    setFrom(new Date(Date.now() - days * 86400000).toISOString().slice(0, 10));
+  };
+  return (
+    <Overlay onClose={onClose}>
+      <h3 className="head mb-1 text-lg font-bold text-zinc-900 dark:text-zinc-50">Custom date range</h3>
+      <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">Pick the exact dates you want to analyze.</p>
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {[{ l: 'Last 14 days', d: 14 }, { l: 'Last 28 days', d: 28 }, { l: 'Last 60 days', d: 60 }, { l: 'Last 180 days', d: 180 }].map((pr) => (
+          <button key={pr.d} onClick={() => preset(pr.d)} className="rounded-full border border-[var(--card-border)] px-3 py-1 text-xs font-semibold text-zinc-500 transition-colors hover:border-[#ffa950]/60 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100">{pr.l}</button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">From</span>
+          <input type="date" value={from} max={to || today} onChange={(e) => setFrom(e.target.value)} className="field" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">To</span>
+          <input type="date" value={to} min={from} max={today} onChange={(e) => setTo(e.target.value)} className="field" />
+        </label>
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">Cancel</button>
+        <button disabled={!valid} onClick={() => onApply({ from, to })} className="btn-primary">Apply range</button>
+      </div>
+    </Overlay>
+  );
+}
 
 function AddSiteModal({ onClose, onCreated }: { onClose: () => void; onCreated: (s: SiteItem) => void }) {
   const [name, setName] = useState('');

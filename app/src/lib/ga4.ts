@@ -142,6 +142,15 @@ export async function ga4LiveStats(json: string, propertyId: string, days: numbe
   return cached(`${propertyId}:${days}`, 300000, () => runLive(json, propertyId, `${days}daysAgo`, 'yesterday', 'date', `${2 * days}daysAgo`, `${days + 1}daysAgo`));
 }
 
+// Custom date range (YYYY-MM-DD, inclusive). Previous range = same length just before.
+export async function ga4RangeStats(json: string, propertyId: string, from: string, to: string): Promise<Ga4Stats | null> {
+  const f = new Date(`${from}T00:00:00Z`).getTime();
+  const t = new Date(`${to}T00:00:00Z`).getTime();
+  const span = Math.max(86400000, t - f + 86400000);
+  const iso = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+  return cached(`${propertyId}:${from}:${to}`, 300000, () => runLive(json, propertyId, from, to, 'date', iso(f - span), iso(f - 86400000)));
+}
+
 // Today: same source as GA4 (today's date), series by hour. Short cache (real time).
 export async function ga4TodayStats(json: string, propertyId: string): Promise<Ga4Stats | null> {
   return cached(`${propertyId}:today`, 60000, () => runLive(json, propertyId, 'today', 'today', 'hour', 'yesterday', 'yesterday'));

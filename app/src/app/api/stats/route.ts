@@ -3,9 +3,9 @@ import { cookies } from 'next/headers';
 import { queryRows } from '@/lib/clickhouse';
 import { validSession } from '@/lib/auth';
 import { getSite } from '@/lib/sites';
-import { stripeRevenue, stripeSeries, type Revenue } from '@/lib/stripe';
+import { stripeRevenue, stripeRevenueRange, stripeSeries, stripeSeriesRange, type Revenue, type RevenueBucket } from '@/lib/stripe';
 import { getGa4Account } from '@/lib/ga4-account';
-import { ga4LiveStats, ga4TodayStats, type Ga4Stats } from '@/lib/ga4';
+import { ga4LiveStats, ga4RangeStats, ga4TodayStats, type Ga4Stats } from '@/lib/ga4';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,11 +34,12 @@ interface AiSeriesRow { d: string; bot: string; c: string }
 
 // AI crawlers + indexing bots (Googlebot, Bingbot...) over N days: a list (with pages per bot),
 // and a per-bot time series for the multi-line chart.
-async function aiData(filter: string, params: Record<string, unknown> | undefined, days: number): Promise<{ ai: Ai[]; aiSeries: AiSeriesPoint[]; aiBots: string[] }> {
+async function aiData(filter: string, params: Record<string, unknown> | undefined, days: number, winExpr?: string): Promise<{ ai: Ai[]; aiSeries: AiSeriesPoint[]; aiBots: string[] }> {
+  const win = winExpr ?? `ts >= now() - INTERVAL ${days} DAY`;
   const [rows, pageRows, seriesRows] = await Promise.all([
-    queryRows<CountRow>(`SELECT bot_name AS key, any(vendor) AS vendor, any(category) AS category, count() AS c, max(ts) AS last_ts FROM ai_hits WHERE ts >= now() - INTERVAL ${days} DAY${filter} GROUP BY bot_name ORDER BY c DESC LIMIT 30`, params),
-    queryRows<AiPageRow>(`SELECT bot_name AS bot, path, count() AS c FROM ai_hits WHERE ts >= now() - INTERVAL ${days} DAY${filter} GROUP BY bot_name, path ORDER BY c DESC LIMIT 400`, params),
-    queryRows<AiSeriesRow>(`SELECT toString(toDate(ts)) AS d, bot_name AS bot, count() AS c FROM ai_hits WHERE ts >= now() - INTERVAL ${days} DAY${filter} GROUP BY d, bot ORDER BY d`, params),
+    queryRows<CountRow>(`SELECT bot_name AS key, any(vendor) AS vendor, any(category) AS category, count() AS c, max(ts) AS last_ts FROM ai_hits WHERE ${win}${filter} GROUP BY bot_name ORDER BY c DESC LIMIT 30`, params),
+    queryRows<AiPageRow>(`SELECT bot_name AS bot, path, count() AS c FROM ai_hits WHERE ${win}${filter} GROUP BY bot_name, path ORDER BY c DESC LIMIT 400`, params),
+    queryRows<AiSeriesRow>(`SELECT toString(toDate(ts)) AS d, bot_name AS bot, count() AS c FROM ai_hits WHERE ${win}${filter} GROUP BY d, bot ORDER BY d`, params),
   ]);
   const pagesByBot = new Map<string, { name: string; count: number }[]>();
   for (const r of pageRows) {
@@ -63,8 +64,12 @@ async function aiData(filter: string, params: Record<string, unknown> | undefine
 const slabel = (d: string): string => (d.length >= 8 ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : `${d.padStart(2, '0')}:00`);
 
 // Overlays Stripe revenue on the visitors series, aligned by label.
-function attachRev<S extends { t: string; count: number }>(series: S[], rev: Record<string, number> | null): (S & { revenue: number })[] {
-  return series.map((p) => ({ ...p, revenue: rev ? Math.round((rev[p.t] ?? 0) * 100) / 100 : 0 }));
+// revenue = net new sales for the bucket, refunds = amount refunded.
+function attachRev<S extends { t: string; count: number }>(series: S[], rev: Record<string, RevenueBucket> | null): (S & { revenue: number; refunds: number })[] {
+  return series.map((p) => {
+    const b = rev?.[p.t];
+    return { ...p, revenue: b ? Math.round(b.n * 100) / 100 : 0, refunds: b ? Math.round(b.r * 100) / 100 : 0 };
+  });
 }
 
 // Transforms a Ga4Stats into the shape expected by the dashboard (Today, cards, series).
@@ -100,9 +105,15 @@ export async function GET(req: Request) {
   const site = url.searchParams.get('site') ?? 'all';
   const period = url.searchParams.get('period') ?? 'today';
   const all = site === 'all' || site === '';
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  const from = url.searchParams.get('from') ?? '';
+  const to = url.searchParams.get('to') ?? '';
+  const custom = period === 'custom' && dateRe.test(from) && dateRe.test(to) && from <= to;
 
   try {
-    const data = period === 'today' ? await liveStats(site, all) : await historyStats(site, all, period);
+    const data = period === 'today'
+      ? await liveStats(site, all)
+      : await historyStats(site, all, custom ? 'custom' : period, custom ? from : undefined, custom ? to : undefined);
     return NextResponse.json(data);
   } catch {
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });
@@ -184,40 +195,52 @@ async function liveStats(site: string, all: boolean) {
 
 // History. If GA4 is connected, we read GA4 live over the exact period (numbers = GA4).
 // Otherwise (GA4 removed, or "all sites"), we aggregate the Insight tracker from ClickHouse.
-async function historyStats(site: string, all: boolean, period: string) {
-  const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+async function historyStats(site: string, all: boolean, period: string, from?: string, to?: string) {
+  const custom = period === 'custom' && !!from && !!to;
+  const days = custom
+    ? Math.min(366, Math.max(1, Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86400000) + 1))
+    : period === '7d' ? 7 : period === '30d' ? 30 : 90;
   const filter = all ? '' : ' AND site_id = {site:String}';
-  const params = all ? undefined : { site };
+  const params: Record<string, unknown> | undefined = all
+    ? (custom ? { from, to } : undefined)
+    : (custom ? { site, from, to } : { site });
+  // Time window expressions: rolling N days, or the exact custom range.
+  const win = custom ? `ts >= toDateTime({from:String}) AND ts < toDateTime({to:String}) + INTERVAL 1 DAY` : `ts >= now() - INTERVAL ${days} DAY`;
+  const pwin = custom
+    ? `ts >= toDateTime({from:String}) - INTERVAL ${days} DAY AND ts < toDateTime({from:String})`
+    : `ts >= now() - INTERVAL ${2 * days} DAY AND ts < now() - INTERVAL ${days} DAY`;
 
   const [onlineRows, aiRes] = await Promise.all([
-    queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 45 SECOND${filter}`, params),
-    aiData(filter, params, days),
+    queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 45 SECOND${filter}`, all ? undefined : { site }),
+    aiData(filter, params, days, custom ? win : undefined),
   ]);
   const { ai, aiSeries, aiBots } = aiRes;
   const online = n(onlineRows[0]?.n);
 
+  const fromSec = custom ? Math.floor(new Date(`${from}T00:00:00Z`).getTime() / 1000) : 0;
+  const toSec = custom ? Math.floor(new Date(`${to}T00:00:00Z`).getTime() / 1000) + 86400 : 0;
   const s = all ? undefined : await getSite(site);
-  const revenue = s?.stripeKey ? await stripeRevenue(s.stripeKey, days) : null;
-  const revMap = s?.stripeKey ? await stripeSeries(s.stripeKey, days) : null;
+  const revenue = s?.stripeKey ? (custom ? await stripeRevenueRange(s.stripeKey, fromSec, toSec) : await stripeRevenue(s.stripeKey, days)) : null;
+  const revMap = s?.stripeKey ? (custom ? await stripeSeriesRange(s.stripeKey, fromSec, toSec) : await stripeSeries(s.stripeKey, days)) : null;
   const base: Base = { revenue, online, campaigns: [], ai, aiSeries, aiBots };
 
   const acc = s?.ga4 ? await getGa4Account() : null;
   if (s?.ga4 && acc) {
-    const g = await ga4LiveStats(acc.json, s.ga4.propertyId, days);
+    const g = custom
+      ? await ga4RangeStats(acc.json, s.ga4.propertyId, from as string, to as string)
+      : await ga4LiveStats(acc.json, s.ga4.propertyId, days);
     if (g) {
       const out = fromGa4(g, base);
       return { ...out, series: attachRev(out.series, revMap) };
     }
   }
-  return eventsHistory(filter, params, days, base, revMap);
+  return eventsHistory(filter, params, days, base, revMap, win, pwin);
 }
 
-// Aggregates history from the Insight tracker (ClickHouse), over N days, series by day.
-async function eventsHistory(filter: string, params: Record<string, unknown> | undefined, days: number, base: Base, revMap: Record<string, number> | null) {
-  const win = `ts >= now() - INTERVAL ${days} DAY`;
+// Aggregates history from the Insight tracker (ClickHouse), series by day.
+// win/pwin are the current and previous time window SQL expressions.
+async function eventsHistory(filter: string, params: Record<string, unknown> | undefined, days: number, base: Base, revMap: Record<string, RevenueBucket> | null, win: string, pwin: string) {
   const pv = `event_type = 'pageview' AND ${win}${filter}`;
-  // Previous window: the N days before (from 2N to N days back).
-  const pwin = `ts >= now() - INTERVAL ${2 * days} DAY AND ts < now() - INTERVAL ${days} DAY`;
   const [tot, series, channels, referrers, pages, countries, devices, browsers, os, campaigns, avg, bounce, prevTot, prevAvg, prevBounce] = await Promise.all([
     queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS visitors, countIf(event_type = 'pageview') AS pageviews FROM events WHERE ${win}${filter}`, params),
     queryRows<CountRow>(`SELECT toString(toDate(ts)) AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} GROUP BY key ORDER BY key`, params),

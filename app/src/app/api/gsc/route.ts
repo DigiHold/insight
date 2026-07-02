@@ -15,8 +15,13 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const site = url.searchParams.get('site') ?? '';
   const period = url.searchParams.get('period') ?? '7d';
+  const from = url.searchParams.get('from') ?? '';
+  const to = url.searchParams.get('to') ?? '';
   // Keywords are a cumulative SEO metric and GSC has latency, so we use a minimum 28-day window.
-  const days = period === '90d' ? 90 : period === '30d' ? 30 : 28;
+  let days = period === '90d' ? 90 : period === '30d' ? 30 : 28;
+  if (period === 'custom' && /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) && from <= to) {
+    days = Math.min(366, Math.max(28, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1));
+  }
 
   const s = await getSite(site);
   const acc = await getGa4Account();
