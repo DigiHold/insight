@@ -16,7 +16,7 @@ interface Visitor {
   id: string; country: string; device: string; browser: string; os: string;
   source: string; path: string; sessionSec: number; visits: number; pages: string[];
 }
-interface LiveData { countries: { country: string; count: number }[]; visitors: Visitor[] }
+interface LiveData { online?: number; countries: { country: string; count: number }[]; visitors: Visitor[] }
 
 const ADJ = ['sapphire', 'amber', 'crimson', 'emerald', 'golden', 'silver', 'azure', 'violet', 'coral', 'jade', 'ivory', 'onyx', 'ruby', 'teal', 'olive', 'scarlet'];
 const ANIMAL = ['hedgehog', 'otter', 'falcon', 'gecko', 'lynx', 'heron', 'ermine', 'marten', 'ibis', 'koala', 'tapir', 'panda', 'viper', 'crane', 'moth', 'fox'];
@@ -246,7 +246,11 @@ export function GlobeModal({ site, onClose }: { site: string; onClose: () => voi
     return () => { map.off('zoom', resize); };
   }, [data.visitors, ready]);
 
-  const total = data.visitors.length;
+  // Total matches the dashboard "Online" chip. Some present visitors have no
+  // known location, so they are counted here but not plotted on the globe.
+  const total = data.online ?? data.visitors.length;
+  const located = data.visitors.filter((v) => v.country).length;
+  const unknown = Math.max(0, total - located);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80" onClick={onClose}>
@@ -273,6 +277,9 @@ export function GlobeModal({ site, onClose }: { site: string; onClose: () => voi
                     {countryName(c.country)} {c.count}
                   </span>
                 ))}
+                {unknown > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-xs text-zinc-400">Unknown location {unknown}</span>
+                )}
               </div>
             )}
           </div>

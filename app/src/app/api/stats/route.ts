@@ -143,7 +143,9 @@ function attachRev<S extends { t: string; count: number }>(series: S[], rev: Rec
 // tracker versions (same numbers as GA4, instantly available).
 function ga4Extras(g: Ga4Stats) {
   const map = (a: { key: string; visitors: number }[]) => a.filter((r) => r.key && r.key !== '(not set)').map((r) => ({ name: r.key, count: r.visitors }));
-  return { landing: map(g.landing ?? []), cities: map(g.cities ?? []), regions: map(g.regions ?? []), languages: map(g.languages ?? []) };
+  const base = { landing: map(g.landing ?? []), cities: map(g.cities ?? []), regions: map(g.regions ?? []), languages: map(g.languages ?? []) };
+  // GA4 knows new vs returning over its full history, so use it when present.
+  return g.split ? { ...base, visitorSplit: g.split } : base;
 }
 
 // Transforms a Ga4Stats into the shape expected by the dashboard (Today, cards, series).

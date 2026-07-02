@@ -69,6 +69,7 @@ export interface Ga4Stats {
   bounceRate: number;
   avgDuration: number;
   prev?: { visitors: number; pageviews: number; bounceRate: number; avgDuration: number };
+  split?: { newV: number; returning: number };
   series: { date: string; visitors: number }[];
   sources: { key: string; visitors: number }[];
   countries: { key: string; visitors: number }[];
@@ -97,7 +98,7 @@ async function runLive(json: string, propertyId: string, startDate: string, endD
   const bd = (name: string, metric: string, limit: number) =>
     runReport(token, propertyId, { dateRanges: range, dimensions: [{ name }], metrics: [{ name: metric }], orderBys: [{ metric: { metricName: metric }, desc: true }], limit });
 
-  const [total, series, sources, countries, devices, browsers, os, pages, landing, cities, regions, languages] = await Promise.all([
+  const [total, series, sources, countries, devices, browsers, os, pages, landing, cities, regions, languages, newret] = await Promise.all([
     runReport(token, propertyId, { dateRanges: totalRanges, metrics: [{ name: USERS }, { name: 'screenPageViews' }, { name: 'bounceRate' }, { name: 'userEngagementDuration' }, { name: 'sessions' }] }),
     runReport(token, propertyId, { dateRanges: range, dimensions: [{ name: seriesDim }], metrics: [{ name: USERS }], orderBys: [{ dimension: { dimensionName: seriesDim } }], limit: 400 }),
     bd('sessionSource', USERS, 50),
@@ -110,6 +111,7 @@ async function runLive(json: string, propertyId: string, startDate: string, endD
     bd('city', USERS, 50),
     bd('region', USERS, 50),
     bd('language', USERS, 50),
+    bd('newVsReturning', USERS, 5),
   ]);
 
   // With two ranges, GA4 adds a dateRange dimension: 'date_range_0' (current), 'date_range_1' (previous).
@@ -125,6 +127,7 @@ async function runLive(json: string, propertyId: string, startDate: string, endD
     // GA4's "Average engagement time per session" = total engagement time / sessions.
     avgDuration: sessions > 0 ? Math.round((mv(t, 3) / sessions) * 1000) : 0,
     prev: p ? { visitors: mv(p, 0), pageviews: mv(p, 1), bounceRate: Math.round(mv(p, 2) * 100), avgDuration: avgOf(p) } : undefined,
+    split: (() => { let n = 0, ret = 0; for (const r of newret) { const k = r.dimensionValues[0].value; if (k === 'new') n = mv(r); else if (k === 'returning') ret = mv(r); } return (n + ret) > 0 ? { newV: n, returning: ret } : undefined; })(),
     series: series.map((r) => ({ date: r.dimensionValues[0].value, visitors: mv(r) })),
     sources: sources.map((r) => ({ key: r.dimensionValues[0].value, visitors: mv(r) })),
     countries: countries.map((r) => ({ key: r.dimensionValues[0].value, visitors: mv(r) })),

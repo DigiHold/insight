@@ -37,7 +37,10 @@ export async function GET(req: Request) {
   const params = all ? undefined : { site };
 
   try {
-    const [countries, visitors] = await Promise.all([
+    const [onlineRows, countries, visitors] = await Promise.all([
+      // Same count as the dashboard "Online" chip, so the globe total matches it
+      // even for present visitors whose location is unknown (no marker).
+      queryRows<{ n: string }>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 45 SECOND${filter}`, params),
       queryRows<CountryRow>(`SELECT country, count() AS c FROM (SELECT visitor_id, any(country) AS country FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 2 HOUR${filter} GROUP BY visitor_id HAVING max(ts) >= now() - INTERVAL 45 SECOND AND countIf(event_type = 'pageview') > 0) WHERE country != '' GROUP BY country ORDER BY c DESC`, params),
       queryRows<VisitorRow>(
         // Truly live via an engagement-based heartbeat: the script pings every 15s as long
@@ -67,6 +70,7 @@ export async function GET(req: Request) {
     ]);
 
     return NextResponse.json({
+      online: Number(onlineRows[0]?.n ?? 0),
       countries: countries.map((r) => ({ country: r.country, count: Number(r.c) })),
       visitors: visitors.map((v) => {
         const list = (v.ts_list ?? []).map(Number).filter((n) => Number.isFinite(n));
@@ -87,6 +91,6 @@ export async function GET(req: Request) {
       }),
     });
   } catch {
-    return NextResponse.json({ countries: [], visitors: [] }, { status: 503 });
+    return NextResponse.json({ online: 0, countries: [], visitors: [] }, { status: 503 });
   }
 }
