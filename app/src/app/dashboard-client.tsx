@@ -685,7 +685,7 @@ function TabbedCard({ title, icon, tabs, emptyNote, metric = 'Visitors' }: { tit
 
       {tabs.length > 1 && (
         <div className="mt-3 flex items-center justify-between gap-3 border-b border-[var(--card-border)]">
-          <div className="tabs-scroll flex gap-4 overflow-x-auto">
+          <div className="tabs-scroll flex min-w-0 flex-1 gap-4 overflow-x-auto">
             {tabs.map((t, i) => (
               <button
                 key={t.label}
@@ -804,20 +804,22 @@ function HeatmapCard({ cells }: { cells: { d: number; h: number; c: number }[] }
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500">visitors by hour · last 4 weeks (UTC)</p>
         </div>
       </div>
-      <div className="mt-4 flex-1">
-        {days.map((day, di) => (
-          <div key={day} className="mb-[3px] flex items-center gap-1.5">
-            <span className="w-8 shrink-0 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">{day}</span>
-            <div className="grid flex-1 gap-[3px]" style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}>
-              {Array.from({ length: 24 }, (_, h) => {
-                const c = byKey.get(`${di + 1}-${h}`) ?? 0;
-                const alpha = max > 0 ? c / max : 0;
-                return <span key={h} title={`${day} ${String(h).padStart(2, '0')}:00 — ${fmt(c)} visitors`} className="aspect-square rounded-[3px]" style={alpha === 0 ? { backgroundColor: 'rgba(128,128,140,0.12)' } : { backgroundColor: '#ffa950', opacity: 0.15 + alpha * 0.85 }} />;
-              })}
+      <div className="mt-4 flex-1 overflow-x-auto">
+        <div className="min-w-[19rem]">
+          {days.map((day, di) => (
+            <div key={day} className="mb-[3px] flex items-center gap-1.5">
+              <span className="w-8 shrink-0 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">{day}</span>
+              <div className="grid flex-1 gap-[3px]" style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}>
+                {Array.from({ length: 24 }, (_, h) => {
+                  const c = byKey.get(`${di + 1}-${h}`) ?? 0;
+                  const alpha = max > 0 ? c / max : 0;
+                  return <span key={h} title={`${day} ${String(h).padStart(2, '0')}:00 — ${fmt(c)} visitors`} className="aspect-square rounded-[3px]" style={alpha === 0 ? { backgroundColor: 'rgba(128,128,140,0.12)' } : { backgroundColor: '#ffa950', opacity: 0.15 + alpha * 0.85 }} />;
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-        <div className="ml-9 mt-1 flex justify-between text-[9px] text-zinc-400 dark:text-zinc-600"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>
+          ))}
+          <div className="ml-9 mt-1 flex justify-between text-[9px] text-zinc-400 dark:text-zinc-600"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>
+        </div>
       </div>
     </div>
   );
@@ -972,7 +974,7 @@ function RevenueAttribCard({ data, currency, siteId }: { data?: { source: { name
         )) : (
           <div className="px-2 py-6 text-center text-sm text-zinc-400 dark:text-zinc-600">
             <p>Add one line on your thank-you page and every sale gets attributed to its traffic source:</p>
-            <pre className="mx-auto mt-3 w-fit rounded-lg bg-black/[0.05] px-3 py-2 text-left font-mono text-xs text-zinc-600 dark:bg-white/[0.06] dark:text-zinc-300">{`insight('purchase', { amount: 99, currency: 'usd' })`}</pre>
+            <pre className="mt-3 max-w-full overflow-x-auto rounded-lg bg-black/[0.05] px-3 py-2 text-left font-mono text-xs text-zinc-600 dark:bg-white/[0.06] dark:text-zinc-300">{`insight('purchase', { amount: 99, currency: 'usd' })`}</pre>
             <p className="mt-2 text-xs">Works with the script already installed on {siteId || 'your site'}.</p>
           </div>
         )}
