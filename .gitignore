@@ -9,3 +9,6 @@ app/.next/
 app/node_modules/
 .DS_Store
 *.tsbuildinfo
+
+# Local, private instructions — never publish
+CLAUDE.md
