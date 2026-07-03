@@ -37,6 +37,7 @@ export default function Login() {
 
   async function submitCode(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
@@ -110,10 +111,16 @@ function CodeInput({ code, setCode }: { code: string; setCode: (v: string) => vo
   return (
     <input
       inputMode="numeric"
+      autoComplete="one-time-code"
       autoFocus
       maxLength={6}
       value={code}
-      onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+      onChange={(e) => {
+        const v = e.target.value.replace(/\D/g, '');
+        setCode(v);
+        // Submit as soon as the 6th digit lands (also covers iOS code autofill).
+        if (v.length === 6) e.target.form?.requestSubmit();
+      }}
       placeholder="123456"
       className="field text-center text-lg tracking-[0.3em]"
     />
