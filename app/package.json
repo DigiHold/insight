@@ -16,23 +16,24 @@
     "@dnd-kit/utilities": "^3.2.2",
     "mapbox-gl": "^3.25.0",
     "maplibre-gl": "^5.0.0",
-    "next": "^15.3.0",
-    "otplib": "^12.0.1",
+    "next": "^16.2.10",
+    "otplib": "^13.4.1",
     "qrcode": "^1.5.4",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "recharts": "^2.15.0"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-is": "^19.2.7",
+    "recharts": "^3.9.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.1.0",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "country-flag-icons": "^1.6.20",
     "postcss": "^8.4.0",
-    "simple-icons": "^13.21.0",
+    "simple-icons": "^16.24.1",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^6.0.3"
   }
 }

@@ -19,7 +19,8 @@ await mkdir(outFlags, { recursive: true });
 // from browser-logos and svgl, so this script does not touch them.
 const MAP = {
   openai: 'siOpenai', anthropic: 'siAnthropic', perplexity: 'siPerplexity', x: 'siX',
-  amazon: 'siAmazon', apple: 'siApple', threads: 'siThreads', stripe: 'siStripe',
+  // amazon: removed from simple-icons v16; the committed public/i/amazon.svg stays as-is.
+  apple: 'siApple', threads: 'siThreads', stripe: 'siStripe',
   android: 'siAndroid', linux: 'siLinux', ubuntu: 'siUbuntu', bytedance: 'siBytedance',
   ecosia: 'siEcosia', qwant: 'siQwant',
 };

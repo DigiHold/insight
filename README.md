@@ -105,7 +105,7 @@ It prints visitors, pageviews, revenue, top pages, sources, countries, devices a
 
 ## Stack
 
-Next.js 15 (App Router, standalone) + React 19 + TypeScript + Tailwind CSS v4. ClickHouse for events, SQLite for configuration. Mapbox GL for the globe, Recharts for charts. Two containers via Docker Compose, and an optional GitHub Actions workflow that builds the image and deploys to your server over SSH on every push.
+Next.js 16 (App Router, standalone) + React 19 + TypeScript + Tailwind CSS v4. ClickHouse for events, SQLite for configuration. Mapbox GL for the globe, Recharts for charts. Two containers via Docker Compose, and an optional GitHub Actions workflow that builds the image and deploys to your server over SSH on every push.
 
 ## License
 

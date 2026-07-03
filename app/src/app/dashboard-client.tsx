@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
+import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import dynamic from 'next/dynamic';
 import { DndContext, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -581,7 +581,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
                       data={chartData}
                       barCategoryGap="28%"
                       margin={{ top: 10, right: 8, bottom: 0, left: 6 }}
-                      onMouseMove={(s: { isTooltipActive?: boolean; activeTooltipIndex?: number }) => { setChartHover(!!s?.isTooltipActive); setActiveIdx(typeof s?.activeTooltipIndex === 'number' ? s.activeTooltipIndex : null); }}
+                      onMouseMove={(s) => { setChartHover(!!s?.isTooltipActive); const i = s?.activeTooltipIndex; setActiveIdx(typeof i === 'number' ? i : typeof i === 'string' && i !== '' && !Number.isNaN(Number(i)) ? Number(i) : null); }}
                       onMouseLeave={() => { setChartHover(false); setActiveIdx(null); }}
                     >
                       <defs>
@@ -751,7 +751,8 @@ function Logo() {
   );
 }
 
-function ChartTooltip({ active, payload, label, currency, hasRevenue }: TooltipProps<number, string> & { currency: string; hasRevenue: boolean }) {
+interface RTipItem { dataKey?: string | number; name?: string | number; value?: number | string; color?: string }
+function ChartTooltip({ active, payload, label, currency, hasRevenue }: { active?: boolean; payload?: RTipItem[]; label?: string | number; currency: string; hasRevenue: boolean }) {
   if (!active || !payload || !payload.length) return null;
   const v = Number(payload.find((p) => p.dataKey === 'v')?.value ?? 0);
   const r = Number(payload.find((p) => p.dataKey === 'r')?.value ?? 0);
@@ -1270,7 +1271,7 @@ function DetailsModal({ title, tab, metric, onClose }: { title: string; tab: Tab
 // (ChatGPT, Googlebot, Bing...) shows the pages it crawled. No Details button.
 const AI_COLORS = ['#ffa950', '#3b82f6', '#10b981', '#ec4899', '#a855f7', '#f43f5e'];
 
-function AiTooltip({ active, payload, label }: TooltipProps<number, string>) {
+function AiTooltip({ active, payload, label }: { active?: boolean; payload?: RTipItem[]; label?: string | number }) {
   if (!active || !payload || !payload.length) return null;
   const rows = payload.filter((p) => Number(p.value) > 0);
   if (!rows.length) return null;
