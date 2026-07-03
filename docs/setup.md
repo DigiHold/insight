@@ -77,6 +77,20 @@ Log in to the dashboard, click "Add site", and give it a name and its URL. You g
 
 Put it once in your site's `<head>`. That single line handles pageviews, the live heartbeat, outbound-link clicks, and the server-side AI-crawler detection. There is nothing else to install.
 
+### Privacy default, and the optional precise mode
+
+By default the tracker stores **nothing** on the visitor's device: no cookies and no localStorage. Visitors are counted server-side with a salted hash that rotates daily, and raw IP addresses are never stored. This is the mode that keeps the "no consent banner" claim true, because the EU storage rule covers localStorage exactly like cookies.
+
+The trade-off: a visitor who returns on a later day counts as new again, so "new vs returning" and retention cohorts are approximations beyond a single day.
+
+If you want precise returning-visitor and retention tracking, add one attribute:
+
+```html
+<script defer data-site="your-site-id" data-persist="true" src="https://analytics.yourdomain.com/t.js?s=your-site-id"></script>
+```
+
+With `data-persist="true"` the tracker stores a random first-party id in localStorage (never a cookie, never fingerprinting). Treat it like a cookie legally: mention it in your privacy policy and, for EU audiences, in your consent flow. Only you can decide which mode fits your site.
+
 ## 5. Create the admin account and 2FA (self-hosted auth)
 
 Auth is fully self-hosted. There is no external identity provider and no account on any server but yours. The dashboard has no public sign-up page and no "register" endpoint, so an admin account cannot be created over the network on your instance. The only admin is the one whose credentials you place in the server environment, and only someone with shell or `.env` access to your own box can set them.
@@ -162,7 +176,7 @@ window.insight('purchase', { amount: 99, currency: 'usd' })
 3. Fire `window.insight('purchase', { amount, currency })` on your payment success.
 4. In Insight, open the Funnel card, click "Set up", and enter the steps as page paths in order, for example `/pricing` then `/signup` then `/welcome`. A visitor counts for a step if they hit the pages in that order within 7 days. The card shows how many make it through each step and the drop-off between them.
 
-Because the visitor id is stable (stored first-party in the browser), a visitor keeps the same identity across pages and days, so source, signup and payment line up on the same person.
+Attribution follows the visitor id. In the default (storage-free) mode the id is stable within a day, so same-day journeys from source to payment line up. With `data-persist="true"` (section 4) the id is stable across days, and multi-day journeys attribute precisely too.
 
 ## 10. Backups
 
@@ -189,6 +203,23 @@ Because Insight is self-hosted, each operator uses their own Google OAuth app. T
 4. Copy the client ID and client secret into Insight's settings.
 
 After that, "Connect Google" opens the Google consent popup, you approve read-only access to Analytics and Search Console once, and Insight stores the refresh token on your server and lists your GA4 properties and Search Console sites to pick from. No JSON, no property ID, no manual user invites.
+
+## 12. Read-only CLI (terminal and AI assistants)
+
+Insight ships a small CLI so you can read your stats from a terminal, a script, or an AI assistant, without opening the dashboard.
+
+1. On the server, set a token in `.env` and restart: `INSIGHT_API_TOKEN=$(openssl rand -hex 32)`. The token is read-only; it can list sites and read stats, nothing else, and it never unlocks the dashboard (which still needs the password and 2FA).
+2. On your machine, export `INSIGHT_URL` and `INSIGHT_TOKEN`, or write them to `~/.config/insight/config.json`.
+3. Run it:
+
+```bash
+node cli/insight.mjs sites
+node cli/insight.mjs stats 30d
+node cli/insight.mjs stats today --site myshop.com
+node cli/insight.mjs stats --from 2026-06-01 --to 2026-06-30 --json
+```
+
+Full reference in [cli/README.md](../cli/README.md).
 
 ## Auto-deploy (optional)
 

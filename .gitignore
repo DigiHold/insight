@@ -8,3 +8,4 @@ geoip/*.mmdb
 app/.next/
 app/node_modules/
 .DS_Store
+*.tsbuildinfo

@@ -1,71 +1,112 @@
-# Insight
+<p align="center">
+  <img src="https://insightsite.nicolaslecocq.com/og.svg" alt="Insight — cookieless, self-hosted web analytics" width="640">
+</p>
 
-Self-hosted, privacy-first web analytics you run on your own VPS. It gives you the real-time visitor map and the clean dashboard of a commercial analytics tool, plus revenue, AI-crawler tracking, funnels and retention, without cookies, without a consent banner, and without sending a single byte to a third party.
+<h1 align="center">Insight</h1>
 
-Everything lives on your server: a Next.js app, a ClickHouse database for events, and a small SQLite file for configuration. You own the data.
+<p align="center">
+  Cookieless, self-hosted web analytics. Real-time visitors, revenue and AI crawlers,<br>
+  on your own server, with nothing stored on your visitors' devices.
+</p>
 
-## What it tracks
+<p align="center">
+  <a href="https://insightsite.nicolaslecocq.com">Website</a> ·
+  <a href="docs/setup.md">Setup guide</a> ·
+  <a href="cli/README.md">CLI</a> ·
+  <a href="LICENSE">MIT license</a>
+</p>
 
-**Audience**
-- Real-time visitors on an interactive 3D globe, with per-visitor detail (country, device, browser, current page, session time). Presence is engagement-based, so a visitor who leaves drops off in about a minute, the same way GA4 behaves.
-- Visitors, page views, bounce rate and average engaged time, each with the change against the previous period.
-- New vs returning visitors.
-- A live feed of pageviews as they happen.
+---
 
-**Acquisition**
-- Channels (search, social, AI, referral, direct), referrers, and campaigns.
-- Full UTM breakdown: source, medium, campaign, term, content.
-- Search Console keywords with position, impressions, clicks and CTR when Google Search Console is connected.
+## What is this?
 
-**Content**
-- Top pages, landing pages, exit pages, and outbound link clicks.
+Insight is a web analytics dashboard you run on your own server. You install it once with Docker, paste one script tag on your sites, and open a dashboard that shows you, in real time, who is visiting, from where, what they read, what they buy, and which AI bots crawl your pages.
 
-**Locations**
-- Countries, regions, cities and visitor languages.
+There is no SaaS, no account to create anywhere, and no third party. Every byte stays in a database on the machine you chose.
 
-**Revenue**
-- Stripe revenue over any period, net of refunds, with new vs refunded amounts and daily bars on the chart.
-- Conversion rate and revenue per visitor.
-- Revenue attribution: which traffic source and which campaign actually bring the money, using your own purchase events.
+## Why people use it
 
-**Behavior**
-- Funnels of 2 to 4 pages with the pass-through rate at each step.
-- Weekly retention cohorts.
-- A busy-hours heatmap (day of week against hour) so you know when your audience is around.
+- **No cookie banner.** By default the tracker sets nothing on the visitor's device: no cookies, no localStorage. Visitors are counted with a salted hash that rotates daily and raw IP addresses are never stored.
+- **Real time that feels real.** The dashboard refreshes every 5 seconds. "Online now" is engagement-based, so an abandoned tab drops off in about a minute instead of haunting your live count for hours.
+- **Money, not just traffic.** Connect Stripe with a read-only key and see which channels and campaigns bring paying customers, refunds included.
+- **The AI angle.** Insight logs every fetch by ChatGPT, Claude, Perplexity, Googlebot and friends, per page, even though bots never run JavaScript. You see exactly what the AI answers are reading.
+- **Yours.** MIT licensed. Fork it, change it, run it forever. No pricing page will ever appear.
 
-**AI and indexing crawlers**
-- Which AI and search bots fetch your pages (ChatGPT, Google, Bing, Gemini, Amazon, Anthropic, Meta and more), split into AI answers, indexing and training, with the exact pages each one crawled. Detection is server-side, so it works even though bots never run JavaScript.
+## What you get
 
-**Everything else**
-- Any period: today, 7, 30 or 90 days, or a custom date range with a real calendar.
-- Dated notes on the chart to explain traffic spikes.
-- Light and dark themes that follow the system.
+| Area | Details |
+|---|---|
+| Audience | Visitors, pageviews, bounce rate, engaged time, new vs returning, live feed, live 3D world map with per-visitor detail |
+| Acquisition | Channels (search, social, AI, referral, direct), referrers, campaigns, full UTM breakdown, Search Console keywords |
+| Content | Top pages, landing pages, exit pages, outbound clicks |
+| Locations | Countries, regions, cities, languages |
+| Revenue | Stripe revenue net of refunds, conversion rate, revenue per visitor, source and campaign attribution from your own purchase events |
+| Behavior | Funnels (2 to 4 steps), weekly retention cohorts, busy-hours heatmap |
+| Bots | AI and indexing crawlers per page, split into AI answers, indexing and training |
+| Comfort | Today / 7d / 30d / 90d / custom range, chart notes, light and dark themes, drag-and-drop dashboard customization, read-only CLI |
 
-## Privacy
-
-Insight is cookieless and needs no consent banner. Visitors are counted with a salted hash and never with a stored raw IP address. Nothing leaves your server. Data-center traffic and known bots are filtered out, so a visitor count means real people.
-
-## How it works
-
-The tracking script is a single line in your site's `<head>`. It sends pageviews and a light heartbeat to `/api/collect` on your own domain. Events go into ClickHouse. The dashboard reads from ClickHouse in real time for today, and reads Google Analytics live for the 7, 30 and 90 day periods when GA4 is connected, so the numbers match GA4 exactly. Stripe revenue is pulled with a read-only key.
-
-## Stack
-
-- Next.js 15 (App Router, standalone) and React 19, TypeScript, Tailwind CSS v4.
-- ClickHouse for events, SQLite for configuration.
-- Mapbox GL for the globe, Recharts for charts.
-- Runs as two containers with Docker Compose. An optional GitHub Actions workflow builds the image and deploys over SSH on every push.
+Optional connections, each one takes a few minutes and is covered in the [setup guide](docs/setup.md): Google Analytics 4 (same numbers as GA4 for history), Google Search Console (keywords), Stripe (revenue), Mapbox (the globe).
 
 ## Quick start
 
-1. Get a VPS from any provider. On a fresh Ubuntu box, `scripts/provision.sh` installs Docker, a firewall and automatic security updates.
-2. Clone this repo into `/opt/insight`, copy `.env.example` to `.env`, and fill in the values.
-3. Run `docker compose up -d`.
-4. Point a subdomain at `127.0.0.1:8787` through your existing reverse proxy or panel, with HTTPS.
-5. Open the dashboard, add your site, and paste the one-line script into your site's `<head>`.
+You need a small Linux server (1 vCPU / 2 GB RAM is plenty) and a domain.
 
-The full guide is in [docs/setup.md](docs/setup.md). It covers connecting GA4, Search Console and Stripe, enabling revenue events and funnels, and how the one-click Google connection works.
+```bash
+# 1. On a fresh Ubuntu server: Docker, firewall, auto security updates
+curl -fsSL https://raw.githubusercontent.com/DigiHold/insight/main/scripts/provision.sh | bash
+
+# 2. Get the code and configure it
+git clone https://github.com/DigiHold/insight /opt/insight && cd /opt/insight
+cp .env.example .env
+nano .env        # set ADMIN_EMAIL, ADMIN_PASSWORD, AUTH_SECRET, CLICKHOUSE_PASSWORD
+
+# 3. Start it
+docker compose up -d
+```
+
+Then point a subdomain (for example `insight.yourdomain.com`) at the server with HTTPS, open it, sign in, add your site, and paste the one-line script it gives you into your site's `<head>`:
+
+```html
+<script defer data-site="YOUR_SITE_ID" src="https://insight.yourdomain.com/t.js?s=YOUR_SITE_ID"></script>
+```
+
+Visits appear on the dashboard within seconds. The [setup guide](docs/setup.md) walks through every step in detail, including HTTPS, backups and the optional integrations.
+
+## Privacy, honestly stated
+
+Words like "compliant" get thrown around a lot, so here is exactly what Insight does:
+
+- **No cookies, and by default nothing else on the device either.** The EU storage rule (the one behind cookie banners) covers localStorage the same way it covers cookies, so Insight's default mode stores nothing at all client-side.
+- **Visitors are counted with a salted SHA-256 hash that rotates every day.** The raw IP address is never written to the database and cannot be recovered from the hash.
+- **All data stays on your server**, in the country and jurisdiction you picked. No third party receives anything.
+- **Optional precise mode.** Adding `data-persist="true"` to the script tag stores a random first-party id in localStorage for exact returning-visitor and retention tracking. If you enable it, treat it like a cookie: mention it in your privacy policy and, for EU audiences, in your consent flow. The default does not need any of that.
+
+One honest caveat: no analytics tool can make your website "GDPR compliant" on its own, because compliance is about everything you do with personal data, not one script. What Insight gives you is an analytics setup designed to be used without a consent banner and without retaining personal data.
+
+## Ask your terminal (or your AI assistant)
+
+Insight ships a read-only CLI. Set one token on the server and you can do:
+
+```bash
+insight stats 30d
+insight stats today --site myshop.com
+insight sites
+```
+
+It prints visitors, pageviews, revenue, top pages, sources, countries, devices and browsers for any period. Point Claude or any assistant at it and ask questions in plain words. The token can only read; it never unlocks the dashboard. See [cli/README.md](cli/README.md).
+
+## Security model
+
+- The dashboard has **no public sign-up and no register endpoint**. The only admin is the email and password you set in the server environment, compared in constant time.
+- **2FA is mandatory**: the first login shows a QR code to scan with any authenticator app, and every login after that requires the 6-digit code.
+- Sessions are HMAC-signed with your `AUTH_SECRET` and expire after 30 days.
+- The dashboard is `noindex` and disallowed in robots.txt.
+- Secrets live only in your `.env` on your server. The repository contains none.
+
+## Stack
+
+Next.js 15 (App Router, standalone) + React 19 + TypeScript + Tailwind CSS v4. ClickHouse for events, SQLite for configuration. Mapbox GL for the globe, Recharts for charts. Two containers via Docker Compose, and an optional GitHub Actions workflow that builds the image and deploys to your server over SSH on every push.
 
 ## License
 
-Personal project, provided as-is. Use it, fork it, run it on your own infrastructure.
+[MIT](LICENSE). Built by [Nicolas Lecocq](https://nicolaslecocq.com).

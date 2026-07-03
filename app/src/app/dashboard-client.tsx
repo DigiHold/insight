@@ -1659,7 +1659,7 @@ function Flag({ code }: { code: string }) {
 function Snippet({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   const [verify, setVerify] = useState<{ state: 'idle' | 'checking' | 'ok' | 'ko'; count: number }>({ state: 'idle', count: 0 });
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://insight.nicolaslecocq.com';
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const code = `<script defer data-site="${id}" src="${origin}/t.js?s=${id}"></script>`;
   return (
     <div>

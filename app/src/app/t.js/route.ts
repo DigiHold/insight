@@ -14,21 +14,29 @@ const SCRIPT = `/* Insight — cookieless analytics. */
 (function () {
   var s = document.currentScript;
   var site = (s && s.getAttribute('data-site')) || 'unknown';
-  var ENDPOINT = 'https://insight.nicolaslecocq.com/api/collect';
+  var ENDPOINT = '__ORIGIN__/api/collect';
   var start = Date.now();
   var sent = false;
-  // Stable first-party visitor id (enables returning visitors and revenue
-  // attribution). Falls back silently if storage is unavailable.
+  // By default the tracker stores NOTHING on the visitor's device: no cookies,
+  // no localStorage. Visitors are counted with a salted hash that rotates daily
+  // (server-side), which keeps the "no consent banner" claim true in the EU,
+  // where the storage rule covers localStorage exactly like cookies.
+  // Opt-in: data-persist="true" on the script tag stores a random first-party id
+  // in localStorage for precise returning-visitor and retention tracking. Sites
+  // that enable it should cover it in their privacy policy (and, for EU
+  // audiences, their consent flow).
   var iid = '';
-  try {
-    iid = localStorage.getItem('_ins_id') || '';
-    if (!iid) {
-      iid = ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, function (c) {
-        return (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16);
-      });
-      localStorage.setItem('_ins_id', iid);
-    }
-  } catch (e) {}
+  if (s && s.getAttribute('data-persist') === 'true') {
+    try {
+      iid = localStorage.getItem('_ins_id') || '';
+      if (!iid) {
+        iid = ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, function (c) {
+          return (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16);
+        });
+        localStorage.setItem('_ins_id', iid);
+      }
+    } catch (e) {}
+  }
   function payload(type, extra) {
     var u = new URL(location.href);
     var body = {
@@ -92,8 +100,12 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   };
 })();`;
 
-function jsResponse(): NextResponse {
-  return new NextResponse(SCRIPT, {
+function jsResponse(req: Request): NextResponse {
+  // The collect endpoint follows the host serving the script, so any self-hosted
+  // instance reports to itself, never to a hardcoded domain.
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || '';
+  const origin = host ? `https://${host}` : new URL(req.url).origin;
+  return new NextResponse(SCRIPT.replace('__ORIGIN__', origin), {
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',
       // no-store: every request reaches the origin, otherwise a CDN cache would hide the crawlers.
@@ -137,5 +149,5 @@ export async function GET(req: Request) {
       }
     }
   }
-  return jsResponse();
+  return jsResponse(req);
 }
