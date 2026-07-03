@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { verify } from 'otplib';
+import { authenticator } from 'otplib';
 import { readAuth, writeAuth, validPwOk, makeSession } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// window 1: accept the previous/next 30s step to tolerate clock drift.
+authenticator.options = { window: 1 };
 
 export async function POST(req: Request) {
   const pwok = (await cookies()).get('insight_pwok')?.value;
@@ -19,9 +22,7 @@ export async function POST(req: Request) {
 
   const auth = await readAuth();
   if (!auth.totpSecret) return NextResponse.json({ error: 'no_secret' }, { status: 400 });
-  // window 1: accept the previous/next 30s step to tolerate clock drift.
-  const check = await verify({ token: code, secret: auth.totpSecret, epochTolerance: 1 }).catch(() => ({ valid: false }));
-  if (!check.valid) {
+  if (!authenticator.verify({ token: code, secret: auth.totpSecret })) {
     return NextResponse.json({ error: 'bad_code' }, { status: 401 });
   }
 
