@@ -20,7 +20,7 @@ export default {
     if (pathname === '/sitemap.xml') return resp(SITEMAP, 'application/xml; charset=utf-8', 86400);
     if (pathname === '/llms.txt')    return resp(LLMS, 'text/plain; charset=utf-8', 86400);
     if (pathname === '/og.svg')      return resp(OG, 'image/svg+xml; charset=utf-8', 604800);
-    return resp(HTML, 'text/html; charset=utf-8', 3600);
+    return resp(HTML, 'text/html; charset=utf-8', 300);
   }
 };
 `;
