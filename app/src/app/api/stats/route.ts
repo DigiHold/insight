@@ -190,13 +190,6 @@ export async function GET(req: Request) {
     const data = period === 'today'
       ? await liveStats(site, all)
       : await historyStats(site, all, custom ? 'custom' : period, custom ? from : undefined, custom ? to : undefined);
-    if (!authed) {
-      // Demo request: never expose money. Everything else is fine to show.
-      const d = data as Record<string, unknown>;
-      d.revenue = null;
-      d.revAttrib = { source: [], campaign: [] };
-      if (Array.isArray(d.series)) d.series = (d.series as { revenue?: number; refunds?: number }[]).map((pt) => ({ ...pt, revenue: 0, refunds: 0 }));
-    }
     return NextResponse.json(data);
   } catch {
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });
