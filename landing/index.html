@@ -196,19 +196,46 @@
   .tile .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;margin-bottom:16px;
     background:linear-gradient(180deg,rgba(255,169,80,.2),rgba(255,169,80,.08));color:var(--accent);
     border:1px solid rgba(255,169,80,.25)}
-  .spark{margin-top:20px;height:56px}
-  .spark path.l{stroke:#ffa950;stroke-width:2.5;fill:none;stroke-linecap:round}
+  /* mini analytics chart (feature tile) */
+  .mchart{position:relative;margin-top:18px}
+  .mchart svg{display:block;width:100%;height:132px}
+  .mchart .grid line{stroke:var(--border);stroke-width:1}
+  .mchart .mprev{fill:none;stroke:var(--faint);stroke-width:1.5;stroke-dasharray:4 6;opacity:.55}
+  .mchart .mline{fill:none;stroke:#ffa950;stroke-width:2.5;stroke-linecap:round;
+    stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 2.2s cubic-bezier(.4,0,.2,1) .3s}
+  .in .mchart .mline{stroke-dashoffset:0}
+  .mchart .marea{opacity:0;transition:opacity 1.2s ease 1.4s}
+  .in .mchart .marea{opacity:1}
+  .mchart .mpt{fill:#ffa950;stroke:var(--bg);stroke-width:2.5;opacity:0;transition:opacity .4s ease 1.8s}
+  .mchart .mring{fill:none;stroke:rgba(255,169,80,.55);stroke-width:1.5;opacity:0;transform-box:fill-box;transform-origin:center}
+  .in .mchart .mpt{opacity:1}
+  .in .mchart .mring{opacity:1;animation:mping 2.2s cubic-bezier(0,0,.2,1) 2s infinite}
+  @keyframes mping{0%{transform:scale(1);opacity:.8}80%,100%{transform:scale(3.2);opacity:0}}
+  .mtip{position:absolute;right:6%;top:-10px;background:var(--card-2);border:1px solid var(--border-hi);
+    border-radius:11px;padding:.45rem .75rem;font-size:.72rem;color:var(--muted);line-height:1.35;
+    box-shadow:0 10px 26px -12px rgba(0,0,0,.5);backdrop-filter:blur(8px);
+    opacity:0;transform:translateY(6px);transition:opacity .5s ease 2s,transform .5s ease 2s}
+  .mtip b{display:block;font-family:var(--head);font-size:.95rem;color:var(--ink)}
+  .in .mtip{opacity:1;transform:none}
+  .mdays{display:flex;justify-content:space-between;margin-top:8px;font-family:var(--mono);font-size:.64rem;color:var(--faint);letter-spacing:.04em}
   .bars{display:flex;align-items:flex-end;gap:6px;height:64px;margin-top:20px}
   .bars i{flex:1;border-radius:4px 4px 2px 2px;background:linear-gradient(180deg,#ffa950,rgba(255,169,80,.25));
     transform:scaleY(0);transform-origin:bottom;transition:transform .8s cubic-bezier(.22,1,.36,1)}
   .in .bars i{transform:scaleY(1)}
   .bars i:nth-child(odd){background:linear-gradient(180deg,#6366f1,rgba(99,102,241,.25))}
-  .dots{position:relative;height:88px;margin-top:16px;border-radius:12px;overflow:clip;
-    background:radial-gradient(rgba(255,255,255,.14) 1px,transparent 1.4px);background-size:14px 14px}
-  .dots i{position:absolute;width:9px;height:9px;border-radius:50%;background:#4ade80;box-shadow:0 0 12px 2px rgba(74,222,128,.55)}
-  .dots i::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid rgba(74,222,128,.4);animation:ping 2s cubic-bezier(0,0,.2,1) infinite}
-  .dots i:nth-child(1){left:18%;top:32%}.dots i:nth-child(2){left:47%;top:58%;animation-delay:.4s}
-  .dots i:nth-child(3){left:72%;top:26%}.dots i:nth-child(4){left:86%;top:62%}
+  /* mini 3D-look globe (feature tile), same mood as the dashboard's Mapbox globe */
+  .globe{display:flex;justify-content:center;margin-top:6px}
+  .globe svg{width:min(100%,300px);height:auto;animation:gfloat 7s ease-in-out infinite alternate}
+  @keyframes gfloat{to{transform:translateY(-7px)}}
+  .globe .grat{stroke:rgba(148,187,255,.18);fill:none;stroke-width:1}
+  .globe .garc{fill:none;stroke:#ffa950;stroke-width:1.6;stroke-linecap:round;stroke-dasharray:3 7;
+    filter:drop-shadow(0 0 4px rgba(255,169,80,.6));animation:gflow 3.2s linear infinite}
+  .globe .garc.g2{animation-duration:4.1s;animation-delay:.8s}
+  @keyframes gflow{to{stroke-dashoffset:-40}}
+  .globe .gdot{fill:#4ade80;filter:drop-shadow(0 0 6px rgba(74,222,128,.8))}
+  .globe .gring{fill:none;stroke:rgba(74,222,128,.5);stroke-width:1.4;transform-box:fill-box;transform-origin:center;
+    animation:mping 2.4s cubic-bezier(0,0,.2,1) infinite}
+  .globe .gring.d1{animation-delay:.6s}.globe .gring.d2{animation-delay:1.2s}
   .bots{display:flex;flex-direction:column;gap:8px;margin-top:18px;font-family:var(--mono);font-size:.76rem;color:var(--muted)}
   .bots span{display:flex;justify-content:space-between;border:1px solid var(--border);border-radius:9px;padding:.42rem .7rem;background:rgba(255,255,255,.03)}
   .bots b{color:#c084fc;font-weight:600}
@@ -305,7 +332,7 @@
     .grain{opacity:.22}
     .aurora i{opacity:.5}
     .nav{background:rgba(255,255,255,.65);box-shadow:0 12px 40px -20px rgba(24,24,27,.35)}
-    .eyebrow{color:#a16207;background:rgba(255,169,80,.14);border-color:rgba(245,153,31,.4);box-shadow:0 0 24px -8px rgba(255,169,80,.4)}
+    .eyebrow{color:#7c3f04;background:rgba(245,153,31,.14);border-color:rgba(180,110,20,.5);box-shadow:none;font-weight:700}
     h1 .grad{background:linear-gradient(92deg,#f5991f 0%,#f97316 45%,#e11d48 80%,#9333ea 110%);-webkit-background-clip:text;background-clip:text}
     .shot{background:rgba(255,255,255,.8);box-shadow:0 40px 110px -44px rgba(24,24,27,.5)}
     .shot-bar i{background:rgba(24,24,27,.12)}
@@ -316,8 +343,6 @@
     .tile::before{background:radial-gradient(340px circle at var(--mx,50%) var(--my,50%),rgba(245,153,31,.12),transparent 65%)}
     .bots span{background:rgba(24,24,27,.03)}
     .bots b{color:#7c3aed}
-    .dots{background:radial-gradient(rgba(24,24,27,.22) 1px,transparent 1.4px);background-size:14px 14px}
-    .dots i{background:#16a34a;box-shadow:0 0 12px 2px rgba(22,163,74,.4)}
     .statement .hl{color:#f5991f}
     .final{background:radial-gradient(60% 120% at 50% 0%,rgba(255,169,80,.2),transparent 70%),radial-gradient(40% 80% at 85% 100%,rgba(99,102,241,.12),transparent 70%),rgba(255,255,255,.5)}
     .btn-ghost{background:rgba(255,255,255,.7)}
@@ -422,13 +447,53 @@
           <div class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-4 4 3 5-7"/></svg></div>
           <h3>Real-time, five-second refresh</h3>
           <p>Visitors, pageviews, bounce rate and time on page, refreshed every five seconds. The number moves while you watch it.</p>
-          <svg class="spark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"><path class="l" d="M0,42 C25,38 40,20 65,26 C90,32 105,12 135,16 C165,20 180,40 210,32 C240,24 260,10 300,14"/></svg>
+          <div class="mchart" aria-hidden="true">
+            <div class="mtip"><b>2,431</b>visitors · Fri 14:00</div>
+            <svg viewBox="0 0 340 132" preserveAspectRatio="none">
+              <defs><linearGradient id="mg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffa950" stop-opacity=".32"/><stop offset="1" stop-color="#ffa950" stop-opacity="0"/></linearGradient></defs>
+              <g class="grid"><line x1="0" y1="18" x2="340" y2="18"/><line x1="0" y1="52" x2="340" y2="52"/><line x1="0" y1="86" x2="340" y2="86"/><line x1="0" y1="120" x2="340" y2="120"/></g>
+              <path class="mprev" d="M0,104 C30,98 55,102 85,94 C115,86 140,96 175,88 C210,80 240,88 275,78 C305,70 325,74 340,70"/>
+              <path class="marea" d="M0,98 C35,88 60,66 95,74 C130,82 150,44 190,52 C230,60 250,24 290,34 C315,40 330,30 340,32 L340,132 L0,132 Z" fill="url(#mg)"/>
+              <path class="mline" pathLength="1" d="M0,98 C35,88 60,66 95,74 C130,82 150,44 190,52 C230,60 250,24 290,34 C315,40 330,30 340,32"/>
+              <circle class="mring" cx="290" cy="34" r="4.5"/>
+              <circle class="mpt" cx="290" cy="34" r="4.5"/>
+            </svg>
+            <div class="mdays"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+          </div>
         </div>
         <div class="tile t-3 rv rv-d1">
           <div class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></div>
           <h3>Live world map</h3>
           <p>A globe of who is on your site right now, with the city, the page and the referrer for each visitor.</p>
-          <div class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="globe" aria-hidden="true">
+            <svg viewBox="0 0 220 186">
+              <defs>
+                <radialGradient id="atm" cx="50%" cy="45%" r="52%"><stop offset="60%" stop-color="rgba(96,165,250,0)"/><stop offset="82%" stop-color="rgba(96,165,250,.30)"/><stop offset="100%" stop-color="rgba(96,165,250,0)"/></radialGradient>
+                <radialGradient id="sph" cx="36%" cy="30%" r="80%"><stop offset="0" stop-color="#2b4a78"/><stop offset="52%" stop-color="#13203c"/><stop offset="100%" stop-color="#070d1d"/></radialGradient>
+                <radialGradient id="shine" cx="32%" cy="24%" r="40%"><stop offset="0" stop-color="rgba(190,215,255,.28)"/><stop offset="100%" stop-color="rgba(190,215,255,0)"/></radialGradient>
+                <clipPath id="gc"><circle cx="110" cy="93" r="70"/></clipPath>
+              </defs>
+              <circle cx="110" cy="93" r="89" fill="url(#atm)"/>
+              <circle cx="110" cy="93" r="70" fill="url(#sph)"/>
+              <g class="grat" clip-path="url(#gc)">
+                <ellipse cx="110" cy="93" rx="70" ry="70"/>
+                <ellipse cx="110" cy="93" rx="47" ry="70"/>
+                <ellipse cx="110" cy="93" rx="20" ry="70"/>
+                <ellipse cx="110" cy="93" rx="70" ry="26"/>
+                <ellipse cx="110" cy="62" rx="60" ry="14"/>
+                <ellipse cx="110" cy="124" rx="60" ry="14"/>
+              </g>
+              <circle cx="110" cy="93" r="70" fill="url(#shine)"/>
+              <g clip-path="url(#gc)">
+                <path class="garc" d="M62,78 Q110,22 160,72"/>
+                <path class="garc g2" d="M76,124 Q122,86 152,112"/>
+              </g>
+              <circle class="gring" cx="62" cy="78" r="4"/><circle class="gdot" cx="62" cy="78" r="3.4"/>
+              <circle class="gring d1" cx="160" cy="72" r="4"/><circle class="gdot" cx="160" cy="72" r="3.4"/>
+              <circle class="gring d2" cx="152" cy="112" r="4"/><circle class="gdot" cx="152" cy="112" r="3.4"/>
+              <circle class="gring" cx="76" cy="124" r="4"/><circle class="gdot" cx="76" cy="124" r="3.4"/>
+            </svg>
+          </div>
         </div>
         <div class="tile t-2 rv">
           <div class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
