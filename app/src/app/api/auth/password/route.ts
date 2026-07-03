@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authenticator } from 'otplib';
+import { generateSecret, keyuri } from '@/lib/totp';
 import QRCode from 'qrcode';
 import { checkCredentials, readAuth, writeAuth, makePwOk, type AuthState } from '@/lib/auth';
 
@@ -9,10 +9,10 @@ export const dynamic = 'force-dynamic';
 async function enrollPayload(auth: AuthState): Promise<{ step: 'enroll'; secret: string; qr: string }> {
   let secret = auth.totpSecret;
   if (!secret) {
-    secret = authenticator.generateSecret();
+    secret = generateSecret();
     await writeAuth({ totpSecret: secret, enrolled: false });
   }
-  const uri = authenticator.keyuri(process.env.ADMIN_EMAIL ?? 'admin', 'Insight', secret);
+  const uri = keyuri(process.env.ADMIN_EMAIL ?? 'admin', 'Insight', secret);
   const qr = await QRCode.toDataURL(uri);
   return { step: 'enroll', secret, qr };
 }
