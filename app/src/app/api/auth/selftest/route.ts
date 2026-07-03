@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { generateSecret, generateToken, verifyToken, keyuri, findDrift } from '@/lib/totp';
-import { readAuth } from '@/lib/auth';
+import { readAuth, makePwOk, validPwOk } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,12 @@ export async function GET(req: Request) {
     ? (() => { const o = stored ? findDrift(code, stored, 20) : null; return { matches: o !== null, driftSteps: o, driftSeconds: o === null ? null : o * 30 }; })()
     : undefined;
 
-  return NextResponse.json({
+  // Cookie roundtrip probe: read the pwok cookie a previous hit set, then set a
+  // fresh one. If the second hit reports valid:false, cookie encoding is broken.
+  const raw = (await cookies()).get('insight_pwok')?.value ?? '';
+  const pwokCookie = { present: !!raw, valid: validPwOk(raw), sep: raw.includes('|') ? 'pipe' : raw.includes('%7C') ? 'encoded-pipe' : 'other' };
+
+  const res = NextResponse.json({
     node: process.version,
     now: new Date().toISOString(),
     rfcVectorsPass: rfc,
@@ -49,5 +55,8 @@ export async function GET(req: Request) {
     uriOk,
     storedSecret: storedInfo,
     codeCheck,
+    pwokCookie,
   });
+  res.cookies.set('insight_pwok', makePwOk(5), { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 300 });
+  return res;
 }
