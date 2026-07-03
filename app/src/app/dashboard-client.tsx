@@ -265,21 +265,15 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
   // Read-only public demo: one fixed site, no mutations, no account chrome.
   const demo = !!demoSite;
   const [sites, setSites] = useState<SiteItem[]>(demoSite ? [demoSite] : []);
-  const [siteId, setSiteId] = useState<string>(() => (demoSite ? demoSite.id : (typeof window !== 'undefined' ? localStorage.getItem('insight_site') ?? '' : '')));
+  const [siteId, setSiteId] = useState<string>(demoSite ? demoSite.id : '');
   const [data, setData] = useState<Stats | null>(null);
   const [modal, setModal] = useState<Modal>(null);
   const [globeOpen, setGlobeOpen] = useState(false);
-  const [period, setPeriod] = useState<Period>(() => {
-    const p = typeof window !== 'undefined' ? localStorage.getItem('insight_period') : null;
-    return p && (PERIODS as string[]).includes(p) ? (p as Period) : 'today';
-  });
+  const [period, setPeriod] = useState<Period>('today');
   const site = sites.find((s) => s.id === siteId);
 
   // Custom date range (used when period === 'custom'), persisted locally.
   const [range, setRange] = useState<{ from: string; to: string }>(() => {
-    if (typeof window !== 'undefined') {
-      try { const r = JSON.parse(localStorage.getItem('insight_range') ?? ''); if (r?.from && r?.to) return r; } catch { /* defaults below */ }
-    }
     const to = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
     return { from, to };
@@ -297,10 +291,26 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
 
   // Dashboard customization: card order + hidden set, edit mode, drag sensors.
   const [editCards, setEditCards] = useState(false);
-  const [cardOrder, setCardOrder] = useState<CardId[]>(() => readIds('insight_card_order', DEFAULT_CARDS));
-  const [hiddenCards, setHiddenCards] = useState<CardId[]>(() => readIds('insight_card_hidden', []));
-  useEffect(() => { localStorage.setItem('insight_card_order', JSON.stringify(cardOrder)); }, [cardOrder]);
-  useEffect(() => { localStorage.setItem('insight_card_hidden', JSON.stringify(hiddenCards)); }, [hiddenCards]);
+  const [cardOrder, setCardOrder] = useState<CardId[]>(DEFAULT_CARDS);
+  const [hiddenCards, setHiddenCards] = useState<CardId[]>([]);
+  // The server always renders the defaults; saved preferences (site, period,
+  // range, card layout) are applied after mount so hydration stays clean.
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  useEffect(() => {
+    try {
+      if (!demoSite) { const sid = localStorage.getItem('insight_site'); if (sid) setSiteId(sid); }
+      const p = localStorage.getItem('insight_period');
+      if (p && (PERIODS as string[]).includes(p)) setPeriod(p as Period);
+      const r = JSON.parse(localStorage.getItem('insight_range') ?? 'null') as { from?: string; to?: string } | null;
+      if (r?.from && r?.to) setRange({ from: r.from, to: r.to });
+      setCardOrder(readIds('insight_card_order', DEFAULT_CARDS));
+      setHiddenCards(readIds('insight_card_hidden', []));
+    } catch { /* first visit or blocked storage: keep defaults */ }
+    setPrefsLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => { if (prefsLoaded) localStorage.setItem('insight_card_order', JSON.stringify(cardOrder)); }, [cardOrder, prefsLoaded]);
+  useEffect(() => { if (prefsLoaded) localStorage.setItem('insight_card_hidden', JSON.stringify(hiddenCards)); }, [hiddenCards, prefsLoaded]);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),

@@ -30,6 +30,9 @@
 
 html {
   color-scheme: light dark;
+  /* Solid backdrop so transparent scrollbar tracks (e.g. inside an iframe)
+     never reveal whatever sits behind the page. */
+  background: var(--page-bg);
 }
 
 /* overflow-x: clip (not hidden) trims horizontal overflow without turning the

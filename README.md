@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://insightsite.nicolaslecocq.com/og.svg" alt="Insight — cookieless, self-hosted web analytics" width="640">
+  <img src="docs/media/dashboard.gif" alt="Insight live dashboard: real-time visitors, chart, sources, countries and AI crawlers" width="720">
 </p>
 
 <h1 align="center">Insight</h1>
