@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Insight — cookieless, self-hosted web analytics (open source)</title>
+<meta name="description" content="Insight is an open-source, cookieless web analytics dashboard you host yourself. Real-time visitors, revenue attribution and AI crawler tracking, with no cookies and no cookie banner. A privacy-first Google Analytics alternative.">
+<link rel="canonical" href="https://insightsite.nicolaslecocq.com/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#ffa950">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://insightsite.nicolaslecocq.com/">
+<meta property="og:title" content="Insight — cookieless, self-hosted web analytics">
+<meta property="og:description" content="Open-source analytics you run on your own server. Real-time visitors, revenue and AI crawlers, with no cookies and no banner.">
+<meta property="og:site_name" content="Insight">
+<meta property="og:image" content="https://insightsite.nicolaslecocq.com/og.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Insight — cookieless, self-hosted web analytics">
+<meta name="twitter:description" content="Open-source analytics you run on your own server. Real-time, cookieless, privacy-first.">
+<meta name="twitter:image" content="https://insightsite.nicolaslecocq.com/og.svg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23ffa950'/%3E%3Crect x='8' y='20' width='4' height='5' rx='2' fill='%23fff' fill-opacity='.5'/%3E%3Crect x='14' y='12' width='4' height='13' rx='2' fill='%23fff' fill-opacity='.75'/%3E%3Crect x='20' y='7' width='4' height='18' rx='2' fill='%23fff'/%3E%3C/svg%3E">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Insight",
+  "applicationCategory": "BusinessApplication",
+  "applicationSubCategory": "Web analytics",
+  "operatingSystem": "Docker, Linux",
+  "description": "Open-source, cookieless, self-hosted web analytics. Real-time visitors, revenue attribution, funnels, retention and AI crawler tracking, with no cookies and no cookie banner.",
+  "url": "https://insightsite.nicolaslecocq.com/",
+  "downloadUrl": "https://github.com/DigiHold/insight",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Nicolas Lecocq", "url": "https://nicolaslecocq.com" },
+  "featureList": [
+    "Cookieless tracker", "Real-time dashboard", "Live visitor world map",
+    "Revenue attribution with Stripe", "Funnels and retention cohorts",
+    "AI crawler tracking", "Google Analytics 4 and Search Console import",
+    "Read-only CLI"
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "Is Insight really free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The code is open source under the MIT licence. You pay only for the small server you run it on." } },
+    { "@type": "Question", "name": "Is Insight a Google Analytics alternative?", "acceptedAnswer": { "@type": "Answer", "text": "It covers the numbers most people open Google Analytics for, and adds revenue, a live map and AI crawler tracking. You can also connect GA4 if you want the old history in the same place." } },
+    { "@type": "Question", "name": "Does Insight use cookies?", "acceptedAnswer": { "@type": "Answer", "text": "No. The tracker is cookieless and sets nothing on the visitor device, so you do not need a cookie banner." } },
+    { "@type": "Question", "name": "What do I need to self-host Insight?", "acceptedAnswer": { "@type": "Answer", "text": "Docker and a small server. One compose file brings up the app and the database over HTTPS." } },
+    { "@type": "Question", "name": "Can Insight track AI crawlers?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. It records visits from ChatGPT, Claude, Perplexity, Googlebot and others, per page, so you can see what the AI answers are reading." } },
+    { "@type": "Question", "name": "How is the dashboard secured?", "acceptedAnswer": { "@type": "Answer", "text": "Access needs your email, your password and a 2FA code. There is no public sign-up, so nobody can create an account on your instance." } }
+  ]
+}
+</script>
+<style>
+  :root{
+    --accent:#ffa950; --accent-deep:#f5991f; --ink:#18181b; --muted:#5b5b66;
+    --bg:#f5f5f7; --card:rgba(255,255,255,.72); --border:rgba(24,24,27,.09);
+    --glass-hi:rgba(255,255,255,.9);
+    --a1:rgba(255,169,80,.20); --a2:rgba(99,102,241,.14); --a3:rgba(45,212,191,.12);
+    --sans:'Bricolage Grotesque',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --body:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--ink:#ececf1;--muted:#a1a1ab;--bg:#08080c;--card:rgba(255,255,255,.055);
+      --border:rgba(255,255,255,.1);--glass-hi:rgba(255,255,255,.28);
+      --a1:rgba(255,158,60,.16);--a2:rgba(99,102,241,.14);--a3:rgba(45,212,191,.08);}
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);
+    line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:clip;min-height:100vh}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:
+      radial-gradient(46% 40% at 15% 6%,var(--a1),transparent 70%),
+      radial-gradient(40% 44% at 88% 10%,var(--a2),transparent 70%),
+      radial-gradient(52% 46% at 55% 98%,var(--a3),transparent 72%);}
+  h1,h2,h3{font-family:var(--sans);letter-spacing:-.02em;line-height:1.08;margin:0}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+  .accent{color:var(--accent-deep)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:20px;
+    box-shadow:0 1px 2px rgba(24,24,27,.04),0 18px 40px -22px rgba(24,24,27,.22);
+    backdrop-filter:blur(12px)}
+  .btn{display:inline-flex;align-items:center;gap:.5rem;font-weight:650;font-size:.98rem;
+    padding:.72rem 1.25rem;border-radius:13px;transition:transform .15s,background .2s,border-color .2s;
+    border:1px solid transparent;cursor:pointer;white-space:nowrap}
+  .btn:active{transform:scale(.98)}
+  .btn-primary{background:var(--accent);color:#573310;box-shadow:0 1px 2px rgba(87,51,16,.2)}
+  .btn-primary:hover{background:var(--accent-deep)}
+  .btn-ghost{background:var(--card);border-color:var(--border);color:var(--ink)}
+  .btn-ghost:hover{border-color:rgba(255,169,80,.55)}
+
+  /* header */
+  header{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);
+    background:color-mix(in srgb,var(--bg) 72%,transparent);border-bottom:1px solid var(--border)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:66px;gap:1rem}
+  .logo{display:flex;align-items:center;gap:.6rem}
+  .logo-name{display:flex;flex-direction:column;line-height:1}
+  .logo-name b{font-family:var(--sans);font-size:1.12rem;letter-spacing:-.02em}
+  .logo-name span{margin-left:1.35rem;font-size:.72rem;font-style:italic;color:var(--muted);margin-top:2px}
+  .logo-name span a:hover{color:var(--accent-deep)}
+  .nav-links{display:flex;align-items:center;gap:1.6rem;font-size:.95rem;color:var(--muted)}
+  .nav-links a:hover{color:var(--ink)}
+  .nav-cta{display:flex;align-items:center;gap:.6rem}
+  @media(max-width:780px){.nav-links{display:none}.nav-cta .hide-sm{display:none}}
+
+  /* hero */
+  .hero{padding:88px 0 40px;text-align:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:.5rem;font-size:.82rem;font-weight:600;
+    color:var(--accent-deep);background:rgba(255,169,80,.12);border:1px solid rgba(255,169,80,.3);
+    padding:.35rem .8rem;border-radius:999px;margin-bottom:1.4rem}
+  h1{font-size:clamp(2.4rem,6vw,4.1rem);font-weight:800;max-width:15ch;margin:0 auto}
+  .sub{font-size:clamp(1.05rem,2.2vw,1.28rem);color:var(--muted);max-width:60ch;margin:1.4rem auto 0}
+  .hero-cta{display:flex;gap:.8rem;justify-content:center;flex-wrap:wrap;margin-top:2rem}
+  .hero-note{font-size:.9rem;color:var(--muted);margin-top:1rem}
+
+  /* dashboard mockup */
+  .shot{margin:52px auto 0;max-width:960px;padding:14px}
+  .shot-inner{border-radius:16px;overflow:hidden;border:1px solid var(--border);background:var(--bg)}
+  .shot-bar{display:flex;gap:6px;padding:11px 14px;border-bottom:1px solid var(--border);align-items:center}
+  .shot-bar i{width:11px;height:11px;border-radius:50%;background:var(--border)}
+  .shot-grid{display:grid;grid-template-columns:230px 1fr;gap:14px;padding:16px}
+  @media(max-width:640px){.shot-grid{grid-template-columns:1fr}}
+  .kpi{border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--card)}
+  .kpi .lab{font-size:.7rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+  .kpi .big{font-family:var(--sans);font-size:2.6rem;font-weight:800;margin-top:2px}
+  .kpi .chip{display:inline-block;font-size:.72rem;color:#0a7d3f;background:rgba(16,185,129,.14);
+    padding:.1rem .45rem;border-radius:999px;margin-left:.4rem;vertical-align:middle}
+  .kpi .row{display:flex;justify-content:space-between;font-size:.82rem;color:var(--muted);margin-top:12px}
+  .kpi .row b{color:var(--ink);font-weight:650}
+  .chart{border:1px solid var(--border);border-radius:14px;padding:14px;background:var(--card);min-height:210px}
+
+  /* strip */
+  .strip{display:flex;flex-wrap:wrap;gap:.7rem;justify-content:center;margin:40px 0 8px}
+  .pill{font-size:.86rem;color:var(--muted);border:1px solid var(--border);background:var(--card);
+    padding:.4rem .85rem;border-radius:999px}
+
+  section{padding:76px 0}
+  .sec-head{text-align:center;max-width:62ch;margin:0 auto 48px}
+  .sec-head h2{font-size:clamp(1.8rem,4vw,2.7rem);font-weight:800}
+  .sec-head p{color:var(--muted);font-size:1.08rem;margin-top:.9rem}
+
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.grid{grid-template-columns:1fr}}
+  .feat{padding:22px}
+  .feat .ic{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;
+    background:rgba(255,169,80,.14);color:var(--accent-deep);margin-bottom:14px}
+  .feat h3{font-size:1.08rem;font-weight:700}
+  .feat p{color:var(--muted);font-size:.95rem;margin:.5rem 0 0}
+
+  /* CLI */
+  .cli{display:grid;grid-template-columns:1fr 1.15fr;gap:34px;align-items:center}
+  @media(max-width:820px){.cli{grid-template-columns:1fr}}
+  .term{background:#0c0c12;border:1px solid rgba(255,255,255,.1);border-radius:16px;
+    font-family:var(--mono);font-size:.83rem;color:#d4d4dc;overflow:hidden;
+    box-shadow:0 24px 50px -24px rgba(0,0,0,.5)}
+  .term-bar{display:flex;gap:6px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .term-bar i{width:11px;height:11px;border-radius:50%;background:#3a3a44}
+  .term pre{margin:0;padding:16px 18px;white-space:pre-wrap;line-height:1.65}
+  .term .p{color:#ffa950}.term .g{color:#5fd39a}.term .d{color:#8a8a97}
+
+  /* steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:760px){.steps{grid-template-columns:1fr}}
+  .step{padding:22px}
+  .step .n{font-family:var(--sans);font-size:1.1rem;font-weight:800;width:34px;height:34px;
+    border-radius:10px;display:grid;place-items:center;background:var(--accent);color:#573310;margin-bottom:12px}
+  .step h3{font-size:1.05rem;font-weight:700}
+  .step p{color:var(--muted);font-size:.95rem;margin:.5rem 0 0}
+
+  /* faq */
+  .faq{max-width:760px;margin:0 auto}
+  details{border:1px solid var(--border);border-radius:14px;background:var(--card);margin-bottom:12px;padding:2px 20px}
+  summary{cursor:pointer;font-weight:650;padding:16px 0;list-style:none;display:flex;justify-content:space-between;gap:1rem}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"+";color:var(--accent-deep);font-size:1.3rem;line-height:1}
+  details[open] summary::after{content:"–"}
+  details p{color:var(--muted);margin:0 0 18px}
+
+  /* final + footer */
+  .final{text-align:center;padding:30px}
+  .final h2{font-size:clamp(1.9rem,4.5vw,2.9rem);font-weight:800;max-width:18ch;margin:0 auto}
+  footer{border-top:1px solid var(--border);padding:44px 0 60px;margin-top:20px}
+  .foot{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:flex-start}
+  .foot p{color:var(--muted);font-size:.9rem;max-width:42ch;margin:.8rem 0 0}
+  .foot-links{display:flex;gap:1.6rem;font-size:.92rem;color:var(--muted)}
+  .foot-links a:hover{color:var(--ink)}
+  .sig{font-style:italic}.sig a{color:var(--accent-deep);font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="#top" aria-label="Insight home">
+      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#ffa950"/><rect x="8" y="20" width="4" height="5" rx="2" fill="#fff" fill-opacity=".5"/><rect x="14" y="12" width="4" height="13" rx="2" fill="#fff" fill-opacity=".75"/><rect x="20" y="7" width="4" height="18" rx="2" fill="#fff"/></svg>
+      <span class="logo-name"><b>Insight</b><span>by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener">Nicolas&nbsp;Lecocq</a></span></span>
+    </a>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#cli">CLI</a>
+      <a href="#self-host">Self-host</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost hide-sm" href="https://insight.nicolaslecocq.com">Sign in</a>
+      <a class="btn btn-primary" href="https://github.com/DigiHold/insight" target="_blank" rel="noopener">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.54-3.88-1.54-.53-1.33-1.3-1.69-1.3-1.69-1.06-.72.08-.71.08-.71 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.76.41-1.27.74-1.56-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.42.36.8 1.08.8 2.18v3.23c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"/></svg>
+        Star on GitHub
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <span class="eyebrow">Open source · self-hosted</span>
+      <h1>Cookieless web analytics you host yourself</h1>
+      <p class="sub">Insight is a privacy-first analytics dashboard you run on your own server. Watch real-time visitors, revenue and AI crawlers, with no cookies and no cookie banner in anyone's way.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="https://github.com/DigiHold/insight" target="_blank" rel="noopener">Get it on GitHub</a>
+        <a class="btn btn-ghost" href="#features">See what it does</a>
+      </div>
+      <p class="hero-note">Free and open source under the MIT licence. Your data stays on the machine you chose.</p>
+
+      <div class="shot card">
+        <div class="shot-inner">
+          <div class="shot-bar"><i></i><i></i><i></i></div>
+          <div class="shot-grid">
+            <div class="kpi">
+              <div class="lab">Last 30 days</div>
+              <div class="big">48,290<span class="chip">▲ 12%</span></div>
+              <div class="row"><span>Pageviews</span><b>131,204</b></div>
+              <div class="row"><span>Revenue</span><b>$9,140</b></div>
+              <div class="row"><span>Bounce</span><b>38%</b></div>
+              <div class="row"><span>Avg time</span><b>1m 46s</b></div>
+            </div>
+            <div class="chart">
+              <svg viewBox="0 0 520 200" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">
+                <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffa950" stop-opacity=".35"/><stop offset="1" stop-color="#ffa950" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0,150 C60,120 90,90 140,110 C190,130 210,60 270,70 C330,80 350,30 410,50 C460,66 490,40 520,44 L520,200 L0,200 Z" fill="url(#g)"/>
+                <path d="M0,150 C60,120 90,90 140,110 C190,130 210,60 270,70 C330,80 350,30 410,50 C460,66 490,40 520,44" fill="none" stroke="#f5991f" stroke-width="3"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="strip">
+        <span class="pill">No cookies</span>
+        <span class="pill">Runs on your server</span>
+        <span class="pill">Open source (MIT)</span>
+        <span class="pill">Updates every 5 seconds</span>
+        <span class="pill">GDPR-friendly</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="why">
+    <div class="wrap sec-head">
+      <h2>Own your analytics again</h2>
+      <p>Google Analytics samples your data, asks visitors to accept cookies, and keeps everything on Google's servers. Insight does the opposite. You install it once, drop one script tag on your sites, and every visit lands in a database you control. No third party reads it, and there is nothing to consent to because there are no cookies.</p>
+    </div>
+  </section>
+
+  <section id="features" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Everything on one screen</h2>
+        <p>The numbers people open an analytics tool for, plus the ones Google Analytics never showed you.</p>
+      </div>
+      <div class="grid">
+        <div class="feat card"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-4 4 3 5-7"/></svg></div><h3>Real-time dashboard</h3><p>Visitors, pageviews, bounce rate and average time, refreshed every five seconds. The number moves while you watch it.</p></div>
+        <div class="feat card"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></div><h3>Live world map</h3><p>A globe of who is on your site right now, with the city, the page and the referrer for each visitor.</p></div>
+        <div class="feat card"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Revenue attribution</h3><p>Connect Stripe and see which channels and campaigns bring paying customers, with refunds counted against the day they happened.</p></div>
+        <div class="feat card"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4Z"/></svg></div><h3>Funnels and retention</h3><p>Track drop-off across the steps that matter, and see how many visitors come back week after week.</p></div>
+        <div class="feat card"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h.01M15 9h.01M8 15h8"/></svg></div><h3>AI crawler tracking</h3><p>See when ChatGPT, Claude, Perplexity and Google's AI bots read your pages, and which pages they read.</p></div>
+        <div class="feat card"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg></div><h3>GA4 and Search Console</h3><p>Pull Google Analytics 4 and Search Console into the same dashboard when you want the old history or the search queries.</p></div>
+        <div class="feat card"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Cookieless tracker</h3><p>A small first-party script with no cookies and no fingerprinting. Nothing to disclose to visitors, nothing for a blocker to catch.</p></div>
+        <div class="feat card"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div><h3>Make it yours</h3><p>Drag the cards to reorder your dashboard and hide the ones you never look at. It remembers your layout on each device.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="cli">
+    <div class="wrap cli">
+      <div>
+        <h2 style="font-size:clamp(1.8rem,4vw,2.6rem);font-weight:800">Ask your assistant for the numbers</h2>
+        <p style="color:var(--muted);font-size:1.08rem;margin-top:1rem">Insight ships a read-only command line. Point Claude or a terminal at it and ask in plain words, for example "how many visitors last month and the top pages".</p>
+        <p style="color:var(--muted);font-size:1.08rem;margin-top:1rem">The token can only read. It never unlocks the dashboard, which still needs your password and a 2FA code.</p>
+      </div>
+      <div class="term">
+        <div class="term-bar"><i></i><i></i><i></i></div>
+        <pre><span class="p">$</span> insight stats 30d
+
+Insight — all sites — last 30 days
+
+Visitors: 48,290   Pageviews: 131,204   Bounce: 38%
+Avg time: 1m 46s   Revenue: $9,140 (214 sales)
+
+<span class="d">Top pages</span>
+  /pricing          9,102  <span class="g">████████</span>
+  /                 7,540  <span class="g">██████</span>
+  /blog/launch      4,318  <span class="g">███</span>
+
+<span class="d">Top countries</span>
+  United States    18,204  <span class="g">████████</span>
+  France            6,077  <span class="g">██</span>
+  Germany           3,910  <span class="g">█</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="self-host" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Run it in a few minutes</h2>
+        <p>One server, one compose file, one script tag. After that the data is yours.</p>
+      </div>
+      <div class="steps">
+        <div class="step card"><div class="n">1</div><h3>Set three values</h3><p>Copy the compose file and set your admin email, your password and a random secret.</p></div>
+        <div class="step card"><div class="n">2</div><h3>Start the container</h3><p>It brings its own database and serves the dashboard over HTTPS behind Cloudflare or Caddy.</p></div>
+        <div class="step card"><div class="n">3</div><h3>Add one script</h3><p>Paste a single script tag on each site you want to measure, and visits start showing up live.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <div class="wrap sec-head">
+      <h2>Private by default</h2>
+      <p>There are no cookies, so you skip the banner and stay clear of the consent rules that apply to Google Analytics. Visitor ids are first-party and built without fingerprinting. The data never leaves the server you chose, in the country you chose.</p>
+    </div>
+  </section>
+
+  <section id="faq" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head"><h2>Questions</h2></div>
+      <div class="faq">
+        <details open><summary>Is Insight really free?</summary><p>Yes. The code is open source under the MIT licence. You pay only for the small server you run it on.</p></details>
+        <details><summary>Is it a Google Analytics alternative?</summary><p>It covers the numbers most people open Google Analytics for, and adds revenue, a live map and AI crawler tracking. You can also connect GA4 if you want the old history in the same place.</p></details>
+        <details><summary>Does it use cookies?</summary><p>No. The tracker is cookieless and sets nothing on the visitor device, so you do not need a cookie banner.</p></details>
+        <details><summary>What do I need to self-host it?</summary><p>Docker and a small server. One compose file brings up the app and the database over HTTPS.</p></details>
+        <details><summary>Can it track AI crawlers?</summary><p>Yes. It records visits from ChatGPT, Claude, Perplexity, Googlebot and others, per page, so you can see what the AI answers are reading.</p></details>
+        <details><summary>How is the dashboard secured?</summary><p>Access needs your email, your password and a 2FA code. There is no public sign-up, so nobody can create an account on your instance.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="final card">
+        <h2>Put it on your own server today</h2>
+        <p class="sub" style="margin:1.1rem auto 0">Clone the repository, follow the setup guide and own your web analytics.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="https://github.com/DigiHold/insight" target="_blank" rel="noopener">Get it on GitHub</a>
+          <a class="btn btn-ghost" href="https://github.com/DigiHold/insight/blob/main/docs/setup.md" target="_blank" rel="noopener">Read the setup guide</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <a class="logo" href="#top">
+        <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#ffa950"/><rect x="8" y="20" width="4" height="5" rx="2" fill="#fff" fill-opacity=".5"/><rect x="14" y="12" width="4" height="13" rx="2" fill="#fff" fill-opacity=".75"/><rect x="20" y="7" width="4" height="18" rx="2" fill="#fff"/></svg>
+        <span class="logo-name"><b>Insight</b></span>
+      </a>
+      <p>Open-source, cookieless, self-hosted web analytics. A privacy-first Google Analytics alternative you run yourself.</p>
+      <p class="sig">by <a href="https://nicolaslecocq.com" target="_blank" rel="noopener">Nicolas&nbsp;Lecocq</a></p>
+    </div>
+    <div class="foot-links">
+      <a href="#features">Features</a>
+      <a href="#cli">CLI</a>
+      <a href="#self-host">Self-host</a>
+      <a href="https://github.com/DigiHold/insight" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://insight.nicolaslecocq.com">Sign in</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
