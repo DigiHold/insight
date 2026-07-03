@@ -69,8 +69,9 @@ async function apiGet(cfg, path) {
 const PERIODS = new Set(['today', '7d', '30d', '90d']);
 function normPeriod(p) {
   if (!p) return '30d';
-  const s = String(p).toLowerCase().replace(/days?$/, 'd');
-  if (s === '1d' || s === 'today') return 'today';
+  const raw = String(p).toLowerCase();
+  if (raw === 'today' || raw === '1d') return 'today';
+  const s = raw.replace(/\s*days?$/, 'd');
   if (PERIODS.has(s)) return s;
   if (s === '7' || s === '30' || s === '90') return `${s}d`;
   fail(`unknown period "${p}" (use today, 7d, 30d, 90d, or --from/--to)`);
