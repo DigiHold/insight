@@ -80,8 +80,9 @@ function normPeriod(p) {
 const PERIOD_LABEL = { today: 'today', '7d': 'last 7 days', '30d': 'last 30 days', '90d': 'last 90 days' };
 
 function num(n) { return Number(n || 0).toLocaleString('en-US'); }
-function dur(sec) {
-  const s = Math.round(Number(sec || 0));
+// avgDuration is milliseconds everywhere in the API (tracker and GA4 alike).
+function dur(ms) {
+  const s = Math.round(Number(ms || 0) / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
   return `${m}m ${s % 60}s`;
