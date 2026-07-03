@@ -14,7 +14,10 @@ async function authed(): Promise<boolean> {
 // Client side config. The Mapbox token (public, URL restricted) is stored globally on
 // the VPS and pasted from the UI, never in the code or the image.
 export async function GET() {
-  if (!(await authed())) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  // The demo dashboard needs the map too. The token is a public pk_ token,
+  // URL-restricted to this domain, so exposing it to demo visitors is safe.
+  const demoEnabled = !!(process.env.DEMO_SITE_ID ?? '');
+  if (!(await authed()) && !demoEnabled) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   return NextResponse.json({ mapbox: await getMapboxToken() });
 }
 

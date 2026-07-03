@@ -12,9 +12,9 @@ export const maxDuration = 30;
 // download it (the site's SVG first) and store it on the VPS on the fly, then serve it.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = (await cookies()).get('insight_session')?.value;
-  if (!validSession(session)) return new NextResponse(null, { status: 401 });
-
   const { id } = await params;
+  if (!validSession(session) && id !== (process.env.DEMO_SITE_ID ?? '__none__')) return new NextResponse(null, { status: 401 });
+
   const site = await getSite(id);
   if (!site) return new NextResponse(null, { status: 404 });
 

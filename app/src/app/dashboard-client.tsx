@@ -461,6 +461,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
 
   const siteDropdown = (wide: boolean) => demo ? (
     <span className="inline-flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+      {demoSite!.favicon && <img src={`/api/favicon/${demoSite!.id}`} alt="" width={16} height={16} className="size-4 rounded" />}
       {demoSite!.name}
       <span className="rounded-full bg-[#ffa950]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#f5991f]">Live demo</span>
     </span>
@@ -635,7 +636,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
                 ]} />,
                 feed: <FeedCard siteId={siteId} />,
                 heatmap: <HeatmapCard cells={data?.heatmap ?? []} />,
-                funnel: <FunnelCard siteId={siteId} funnel={data?.funnel ?? null} onSaved={() => loadStats(siteId)} />,
+                funnel: <FunnelCard siteId={siteId} funnel={data?.funnel ?? null} readonly={demo} onSaved={() => loadStats(siteId)} />,
                 retention: <RetentionCard rows={data?.retention ?? []} />,
                 revenue: <RevenueAttribCard data={data?.revAttrib} currency={currency} siteId={siteId} />,
                 ai: <AiCard data={data} period={period} />,
@@ -978,7 +979,7 @@ function HeatmapCard({ cells }: { cells: { d: number; h: number; c: number }[] }
 }
 
 // Funnel: visitors completing each configured step, with pass-through rates.
-function FunnelCard({ siteId, funnel, onSaved }: { siteId: string; funnel: { steps: string[]; counts: number[] } | null; onSaved: () => void }) {
+function FunnelCard({ siteId, funnel, readonly, onSaved }: { siteId: string; funnel: { steps: string[]; counts: number[] } | null; readonly?: boolean; onSaved: () => void }) {
   const [edit, setEdit] = useState(false);
   const top = funnel?.counts[0] ?? 0;
   return (
@@ -991,7 +992,7 @@ function FunnelCard({ siteId, funnel, onSaved }: { siteId: string; funnel: { ste
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500">visitors completing each step</p>
           </div>
         </div>
-        <button onClick={() => setEdit(true)} className="shrink-0 text-xs font-semibold text-zinc-400 transition-colors hover:text-zinc-800 dark:hover:text-zinc-100">{funnel ? 'Edit' : 'Set up'}</button>
+        {!readonly && <button onClick={() => setEdit(true)} className="shrink-0 text-xs font-semibold text-zinc-400 transition-colors hover:text-zinc-800 dark:hover:text-zinc-100">{funnel ? 'Edit' : 'Set up'}</button>}
       </div>
       <div className="mt-4 flex-1">
         {funnel ? (
