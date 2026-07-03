@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { validSession } from '@/lib/auth';
+import { validSession, demoAllowed } from '@/lib/auth';
 import { getJson, setJson } from '@/lib/settings';
 
 export const runtime = 'nodejs';
@@ -12,8 +12,8 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Chart annotations: small dated notes (deploy, campaign, viral post).
 export async function GET(req: Request) {
   const session = (await cookies()).get('insight_session')?.value;
-  if (!validSession(session)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const site = new URL(req.url).searchParams.get('site') ?? '';
+  if (!validSession(session) && !demoAllowed(site)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const notes = (await getJson<Note[]>(`notes-${site}`)) ?? [];
   return NextResponse.json({ notes });
 }

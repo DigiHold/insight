@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { queryRows } from '@/lib/clickhouse';
-import { validSession, validApiToken, bearerFrom } from '@/lib/auth';
+import { validSession, validApiToken, bearerFrom, demoAllowed } from '@/lib/auth';
 import { getSite } from '@/lib/sites';
 import { getJson } from '@/lib/settings';
 import { stripeRevenue, stripeRevenueRange, stripeSeries, stripeSeriesRange, type Revenue, type RevenueBucket } from '@/lib/stripe';
@@ -174,11 +174,11 @@ function fromGa4(g: Ga4Stats, base: Base) {
 }
 
 export async function GET(req: Request) {
-  const session = (await cookies()).get('insight_session')?.value;
-  if (!validSession(session) && !validApiToken(bearerFrom(req))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-
   const url = new URL(req.url);
   const site = url.searchParams.get('site') ?? 'all';
+  const session = (await cookies()).get('insight_session')?.value;
+  const authed = validSession(session) || validApiToken(bearerFrom(req));
+  if (!authed && !demoAllowed(site)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const period = url.searchParams.get('period') ?? 'today';
   const all = site === 'all' || site === '';
   const dateRe = /^\d{4}-\d{2}-\d{2}$/;
@@ -190,6 +190,13 @@ export async function GET(req: Request) {
     const data = period === 'today'
       ? await liveStats(site, all)
       : await historyStats(site, all, custom ? 'custom' : period, custom ? from : undefined, custom ? to : undefined);
+    if (!authed) {
+      // Demo request: never expose money. Everything else is fine to show.
+      const d = data as Record<string, unknown>;
+      d.revenue = null;
+      d.revAttrib = { source: [], campaign: [] };
+      if (Array.isArray(d.series)) d.series = (d.series as { revenue?: number; refunds?: number }[]).map((pt) => ({ ...pt, revenue: 0, refunds: 0 }));
+    }
     return NextResponse.json(data);
   } catch {
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });

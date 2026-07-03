@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { validSession } from '@/lib/auth';
+import { validSession, demoAllowed } from '@/lib/auth';
 import { getJson, setJson } from '@/lib/settings';
 
 export const runtime = 'nodejs';
@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 // Funnel definition: an ordered list of page paths (2 to 4 steps).
 export async function GET(req: Request) {
   const session = (await cookies()).get('insight_session')?.value;
-  if (!validSession(session)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const site = new URL(req.url).searchParams.get('site') ?? '';
+  if (!validSession(session) && !demoAllowed(site)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const steps = (await getJson<string[]>(`funnel-${site}`)) ?? [];
   return NextResponse.json({ steps });
 }

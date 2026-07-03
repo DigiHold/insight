@@ -70,6 +70,13 @@ export function bearerFrom(req: Request): string | undefined {
   return m ? m[1].trim() : undefined;
 }
 
+// Public read-only demo. When DEMO_SITE_ID is set, GET endpoints may serve that
+// one site without a session; the stats route strips revenue for such requests.
+export function demoAllowed(site: string | null | undefined): boolean {
+  const d = process.env.DEMO_SITE_ID ?? '';
+  return !!d && !!site && site === d;
+}
+
 export function makeSession(days: number): string {
   return sign('session', Date.now() + days * 86400000);
 }

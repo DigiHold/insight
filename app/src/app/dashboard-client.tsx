@@ -261,9 +261,11 @@ function SortableCard({ id, wide, edit, onHide, children }: { id: CardId; wide: 
 
 const GripIcon = () => <Ico><circle cx="9" cy="6" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="9" cy="18" r="1" /><circle cx="15" cy="6" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="18" r="1" /></Ico>;
 
-export default function Dashboard() {
-  const [sites, setSites] = useState<SiteItem[]>([]);
-  const [siteId, setSiteId] = useState<string>(() => (typeof window !== 'undefined' ? localStorage.getItem('insight_site') ?? '' : ''));
+export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
+  // Read-only public demo: one fixed site, no mutations, no account chrome.
+  const demo = !!demoSite;
+  const [sites, setSites] = useState<SiteItem[]>(demoSite ? [demoSite] : []);
+  const [siteId, setSiteId] = useState<string>(() => (demoSite ? demoSite.id : (typeof window !== 'undefined' ? localStorage.getItem('insight_site') ?? '' : '')));
   const [data, setData] = useState<Stats | null>(null);
   const [modal, setModal] = useState<Modal>(null);
   const [globeOpen, setGlobeOpen] = useState(false);
@@ -318,6 +320,7 @@ export default function Dashboard() {
   useEffect(() => { localStorage.setItem('insight_range', JSON.stringify(range)); }, [range]);
 
   const loadSites = useCallback(async () => {
+    if (demo) return;
     const res = await fetch('/api/sites', { cache: 'no-store' });
     if (!res.ok) return;
     const list = ((await res.json()).sites ?? []) as SiteItem[];
@@ -456,7 +459,12 @@ export default function Dashboard() {
     </button>
   );
 
-  const siteDropdown = (wide: boolean) => sites.length > 0 && (
+  const siteDropdown = (wide: boolean) => demo ? (
+    <span className="inline-flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+      {demoSite!.name}
+      <span className="rounded-full bg-[#ffa950]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#f5991f]">Live demo</span>
+    </span>
+  ) : sites.length > 0 && (
     <Dropdown
       wide={wide}
       value={siteId}
@@ -498,14 +506,14 @@ export default function Dashboard() {
                 <Logo />
                 <div className="flex items-center gap-1.5">
                   {liveChip}
-                  <button onClick={logout} aria-label="Log out" title="Log out" className="flex size-9 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10"><PowerIcon /></button>
+                  {!demo && <button  onClick={logout} aria-label="Log out" title="Log out" className="flex size-9 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10"><PowerIcon /></button>}
                 </div>
               </div>
               {sites.length > 0 && (
                 <div className="flex items-center gap-1.5">
                   <div className="min-w-0">{siteDropdown(false)}</div>
-                  {siteMenu}
-                  <button onClick={() => setModal({ type: 'add' })} aria-label="Add site" className="btn-primary ml-auto shrink-0 px-3"><PlusIcon /></button>
+                  {!demo && siteMenu}
+                  {!demo && <button onClick={() => setModal({ type: 'add' })} aria-label="Add site" className="btn-primary ml-auto shrink-0 px-3"><PlusIcon /></button>}
                 </div>
               )}
               {periodPills(true)}
@@ -516,13 +524,13 @@ export default function Dashboard() {
               <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                 <Logo />
                 {siteDropdown(false)}
-                {siteMenu}
+                {!demo && siteMenu}
                 {liveChip}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {periodPills(false)}
-                <button onClick={() => setModal({ type: 'add' })} className="btn-primary"><PlusIcon />Add site</button>
-                <button onClick={logout} aria-label="Log out" title="Log out" className="flex size-9 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10"><PowerIcon /></button>
+                {demo ? <a className="btn-primary" href="https://github.com/DigiHold/insight" target="_blank" rel="noopener noreferrer">Get Insight free</a> : <button onClick={() => setModal({ type: 'add' })} className="btn-primary"><PlusIcon />Add site</button>}
+                {!demo && <button  onClick={logout} aria-label="Log out" title="Log out" className="flex size-9 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10"><PowerIcon /></button>}
               </div>
             </div>
           </header>
@@ -553,7 +561,7 @@ export default function Dashboard() {
 
               <div className="card flex min-w-0 flex-col p-2.5 sm:p-5">
                 <div className="mb-1 flex justify-end">
-                  <button onClick={() => setNoteOpen(true)} title="Add a note on the chart" className="rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100">+ Note</button>
+                  {!demo && (<button onClick={() => setNoteOpen(true)} title="Add a note on the chart" className="rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 dark:hover:bg-white/[0.07] dark:hover:text-zinc-100">+ Note</button>)}
                 </div>
                 <div className="h-64 w-full sm:h-72 lg:h-[22rem]">
                 {chartData.length > 0 ? (

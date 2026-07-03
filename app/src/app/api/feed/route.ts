@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { queryRows } from '@/lib/clickhouse';
-import { validSession } from '@/lib/auth';
+import { validSession, demoAllowed } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,8 +11,8 @@ interface FeedRow { ts: string; pathname: string; country: string; source: strin
 // Real-time feed: the last pageviews as they happen.
 export async function GET(req: Request) {
   const session = (await cookies()).get('insight_session')?.value;
-  if (!validSession(session)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const site = new URL(req.url).searchParams.get('site') ?? '';
+  if (!validSession(session) && !demoAllowed(site)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const all = !site || site === 'all';
   const filter = all ? '' : ' AND site_id = {site:String}';
   const params = all ? undefined : { site };

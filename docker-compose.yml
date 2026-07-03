@@ -24,6 +24,9 @@ services:
       - MAPBOX_TOKEN=${MAPBOX_TOKEN}
       # Read-only CLI token; empty (unset) disables the API entirely.
       - INSIGHT_API_TOKEN=${INSIGHT_API_TOKEN:-}
+      # Public read-only demo at /demo for this one site id (revenue hidden).
+      # Empty disables the demo entirely.
+      - DEMO_SITE_ID=${DEMO_SITE_ID:-}
     volumes:
       - app_data:/data
     depends_on:
