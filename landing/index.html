@@ -71,34 +71,6 @@
     --sign:'Caveat',cursive;
     --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
   }
-  /* Light theme when the system asks for it (dark is the default above). */
-  @media (prefers-color-scheme:light){
-    :root{
-      --bg:#f4f4f6; --ink:#18181b; --muted:#5a5a66; --faint:#8d8d98;
-      --card:rgba(255,255,255,.75); --card-2:rgba(255,255,255,.92);
-      --border:rgba(24,24,27,.09); --border-hi:rgba(24,24,27,.17);
-    }
-    .grain{opacity:.22}
-    .aurora i{opacity:.5}
-    .nav{background:rgba(255,255,255,.65);box-shadow:0 12px 40px -20px rgba(24,24,27,.35)}
-    .eyebrow{color:#a16207;background:rgba(255,169,80,.14);border-color:rgba(245,153,31,.4);box-shadow:0 0 24px -8px rgba(255,169,80,.4)}
-    h1 .grad{background:linear-gradient(92deg,#f5991f 0%,#f97316 45%,#e11d48 80%,#9333ea 110%);-webkit-background-clip:text;background-clip:text}
-    .shot{background:rgba(255,255,255,.8);box-shadow:0 40px 110px -44px rgba(24,24,27,.5)}
-    .shot-bar i{background:rgba(24,24,27,.12)}
-    .shot-bar .url{background:rgba(24,24,27,.04)}
-    .kpi,.chart{background:rgba(255,255,255,.65)}
-    .kpi .chip{color:#0a7d3f;background:rgba(16,185,129,.15)}
-    .kpi .live{color:#0a7d3f}
-    .tile::before{background:radial-gradient(340px circle at var(--mx,50%) var(--my,50%),rgba(245,153,31,.12),transparent 65%)}
-    .bots span{background:rgba(24,24,27,.03)}
-    .bots b{color:#7c3aed}
-    .dots{background:radial-gradient(rgba(24,24,27,.22) 1px,transparent 1.4px);background-size:14px 14px}
-    .dots i{background:#16a34a;box-shadow:0 0 12px 2px rgba(22,163,74,.4)}
-    .statement .hl{color:#f5991f}
-    .final{background:radial-gradient(60% 120% at 50% 0%,rgba(255,169,80,.2),transparent 70%),radial-gradient(40% 80% at 85% 100%,rgba(99,102,241,.12),transparent 70%),rgba(255,255,255,.5)}
-    .btn-ghost{background:rgba(255,255,255,.7)}
-    ::selection{background:rgba(255,169,80,.45)}
-  }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth;color-scheme:light dark}
   body{background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.6;
@@ -322,6 +294,34 @@
     *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
     .rv{opacity:1;transform:none}
     html{scroll-behavior:auto}
+  }
+  /* Light theme when the system asks for it (dark is the default). */
+  @media (prefers-color-scheme:light){
+    :root{
+      --bg:#f4f4f6; --ink:#18181b; --muted:#5a5a66; --faint:#8d8d98;
+      --card:rgba(255,255,255,.75); --card-2:rgba(255,255,255,.92);
+      --border:rgba(24,24,27,.09); --border-hi:rgba(24,24,27,.17);
+    }
+    .grain{opacity:.22}
+    .aurora i{opacity:.5}
+    .nav{background:rgba(255,255,255,.65);box-shadow:0 12px 40px -20px rgba(24,24,27,.35)}
+    .eyebrow{color:#a16207;background:rgba(255,169,80,.14);border-color:rgba(245,153,31,.4);box-shadow:0 0 24px -8px rgba(255,169,80,.4)}
+    h1 .grad{background:linear-gradient(92deg,#f5991f 0%,#f97316 45%,#e11d48 80%,#9333ea 110%);-webkit-background-clip:text;background-clip:text}
+    .shot{background:rgba(255,255,255,.8);box-shadow:0 40px 110px -44px rgba(24,24,27,.5)}
+    .shot-bar i{background:rgba(24,24,27,.12)}
+    .shot-bar .url{background:rgba(24,24,27,.04)}
+    .kpi,.chart{background:rgba(255,255,255,.65)}
+    .kpi .chip{color:#0a7d3f;background:rgba(16,185,129,.15)}
+    .kpi .live{color:#0a7d3f}
+    .tile::before{background:radial-gradient(340px circle at var(--mx,50%) var(--my,50%),rgba(245,153,31,.12),transparent 65%)}
+    .bots span{background:rgba(24,24,27,.03)}
+    .bots b{color:#7c3aed}
+    .dots{background:radial-gradient(rgba(24,24,27,.22) 1px,transparent 1.4px);background-size:14px 14px}
+    .dots i{background:#16a34a;box-shadow:0 0 12px 2px rgba(22,163,74,.4)}
+    .statement .hl{color:#f5991f}
+    .final{background:radial-gradient(60% 120% at 50% 0%,rgba(255,169,80,.2),transparent 70%),radial-gradient(40% 80% at 85% 100%,rgba(99,102,241,.12),transparent 70%),rgba(255,255,255,.5)}
+    .btn-ghost{background:rgba(255,255,255,.7)}
+    ::selection{background:rgba(255,169,80,.45)}
   }
 </style>
 </head>

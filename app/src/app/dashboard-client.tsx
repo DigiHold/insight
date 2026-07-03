@@ -1658,11 +1658,34 @@ function Flag({ code }: { code: string }) {
 
 function Snippet({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
+  const [persist, setPersist] = useState(false);
   const [verify, setVerify] = useState<{ state: 'idle' | 'checking' | 'ok' | 'ko'; count: number }>({ state: 'idle', count: 0 });
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const code = `<script defer data-site="${id}" src="${origin}/t.js?s=${id}"></script>`;
+  const code = `<script defer data-site="${id}"${persist ? ' data-persist="true"' : ''} src="${origin}/t.js?s=${id}"></script>`;
   return (
     <div>
+      {/* Two flavors of the same script: storage-free (banner-free) vs persistent id. */}
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setPersist(false)}
+          className={`rounded-xl border p-3 text-left transition-colors ${!persist ? 'border-[#ffa950] bg-[#ffa950]/10' : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600'}`}
+        >
+          <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-50">Cookieless</span>
+          <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">Stores nothing on the device. No consent banner needed.</span>
+        </button>
+        <button
+          onClick={() => setPersist(true)}
+          className={`rounded-xl border p-3 text-left transition-colors ${persist ? 'border-[#ffa950] bg-[#ffa950]/10' : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600'}`}
+        >
+          <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-50">Full data</span>
+          <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">Precise returning visitors, retention and multi-day attribution.</span>
+        </button>
+      </div>
+      <p className="mb-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+        {persist
+          ? 'Stores one random first-party id in localStorage (no cookies, no fingerprinting), so a visitor keeps the same identity across days: exact new vs returning, retention cohorts and multi-day revenue attribution. Legally, treat it like a cookie: cover it in your privacy policy and, for EU visitors, in your consent flow. Policy line you can paste: "We use Insight, a self-hosted analytics tool. It sets no cookies. It stores a random identifier in your browser’s local storage to recognize returning visits. It never stores your IP address and the data never leaves our server."'
+          : 'Counts visitors with a salted hash that rotates daily, server-side. Nothing is written to the visitor’s device and raw IPs are never stored, so no consent banner is required. Trade-off: a visitor who comes back on a later day counts as new again, so retention and new vs returning are approximate beyond one day.'}
+      </p>
       <p className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">Add this script to your site&apos;s <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">&lt;head&gt;</code>:</p>
       <div className="relative">
         <pre className="overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-3 pr-16 text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">{code}</pre>
