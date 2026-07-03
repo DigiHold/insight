@@ -1,0 +1,12 @@
+{
+  // Cloudflare Worker for the public landing page. Deployed from Git (Workers Builds).
+  // The dashboard Worker name MUST match "name" below, or the build fails.
+  "name": "insight-landing",
+  "main": "worker.js",
+  "compatibility_date": "2026-06-01",
+  // Serve the landing on this hostname. custom_domain lets the deploy create the
+  // DNS record and the SSL certificate automatically, no manual DNS step needed.
+  "routes": [
+    { "pattern": "insightsite.nicolaslecocq.com", "custom_domain": true }
+  ]
+}
