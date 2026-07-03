@@ -70,6 +70,20 @@ export function generateToken(secret: string, atMs: number = Date.now()): string
   return hotp(base32Decode(secret), Math.floor(atMs / 1000 / PERIOD));
 }
 
+// Diagnostic only: the step offset at which `token` matches `secret`, searching
+// +/- maxSteps around now, or null if it never matches. Reveals clock drift
+// (nonzero offset) vs a wrong secret (null) without exposing the secret itself.
+export function findDrift(token: string, secret: string, maxSteps = 20): number | null {
+  const code = (token || '').replace(/\D/g, '');
+  if (code.length !== DIGITS || !secret) return null;
+  const key = base32Decode(secret);
+  const step = Math.floor(Date.now() / 1000 / PERIOD);
+  for (let w = -maxSteps; w <= maxSteps; w++) {
+    if (hotp(key, step + w) === code) return w;
+  }
+  return null;
+}
+
 // Verify a code, accepting the adjacent 30s steps to tolerate clock drift.
 // Constant-time comparison, and it never throws on malformed input.
 export function verifyToken(token: string, secret: string, window = 1): boolean {

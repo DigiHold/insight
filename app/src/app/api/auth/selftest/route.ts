@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { generateSecret, generateToken, verifyToken, keyuri } from '@/lib/totp';
+import { generateSecret, generateToken, verifyToken, keyuri, findDrift } from '@/lib/totp';
 import { readAuth } from '@/lib/auth';
 
 export const runtime = 'nodejs';
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 // Temporary diagnostic. Runs the TOTP self-checks in the real server runtime and
 // reports pass/fail only. It never returns any secret or any live code.
-export async function GET() {
+export async function GET(req: Request) {
   // 1. RFC 6238 SHA-1 vectors (secret ASCII "12345678901234567890").
   const S = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
   const vectors: [number, string][] = [
@@ -33,6 +33,14 @@ export async function GET() {
 
   const uriOk = keyuri('a@b.com', 'Insight', s).startsWith('otpauth://totp/');
 
+  // If a code is provided, report at which clock-step offset it matches the
+  // stored secret (searching +/- 10 min). offset null = wrong secret; nonzero
+  // offset = the phone's clock is off by offset*30 seconds.
+  const code = new URL(req.url).searchParams.get('code') ?? '';
+  const codeCheck = code
+    ? (() => { const o = stored ? findDrift(code, stored, 20) : null; return { matches: o !== null, driftSteps: o, driftSeconds: o === null ? null : o * 30 }; })()
+    : undefined;
+
   return NextResponse.json({
     node: process.version,
     now: new Date().toISOString(),
@@ -40,5 +48,6 @@ export async function GET() {
     freshRoundTrip: roundtrip,
     uriOk,
     storedSecret: storedInfo,
+    codeCheck,
   });
 }
