@@ -234,19 +234,54 @@ async function liveStats(site: string, all: boolean) {
   const { ai: aiOut, aiSeries, aiBots } = aiRes;
   const campaignsOut = campaigns.map((r) => ({ name: r.key, count: n(r.c) }));
 
+  // Insight's own tracker breakdowns for today, reused for the normal path and as
+  // the fallback when GA4 is connected but its intraday breakdowns are not ready.
+  const nativeSeries = series.map((r) => ({ t: r.h.length >= 13 ? `${r.h.slice(11, 13)}:00` : r.h, count: n(r.c) }));
+  const native = {
+    channels: channels.map((r) => ({ name: r.key, type: r.key, count: n(r.c) })),
+    referrers: referrers.map((r) => ({ name: r.key, count: n(r.c) })),
+    pages: pages.map((r) => ({ name: r.key || '/', count: n(r.c) })),
+    countries: countries.map((r) => ({ name: r.key, count: n(r.c) })),
+    devices: devices.map((r) => ({ name: r.key, count: n(r.c) })),
+    browsers: browsers.map((r) => ({ name: r.key, count: n(r.c) })),
+    os: os.map((r) => ({ name: r.key, count: n(r.c) })),
+  };
+
   let revenue: Revenue | null = null;
   const s = all ? undefined : await getSite(site);
   if (s?.stripeKey) revenue = await stripeRevenue(s.stripeKey, 1);
   const revMap = s?.stripeKey ? await stripeSeries(s.stripeKey, 1) : null;
 
-  // If GA4 is connected, "Today" comes from GA4 (same number as in GA4). The tracker
-  // is then only used for real time: Online and the live card.
+  // If GA4 is connected, "Today" totals come from GA4 (same numbers as in GA4).
+  // GA4 delivers the headline totals for the in-progress day instantly, but its
+  // per-dimension breakdowns (channels, pages, hourly series, landing, cities,
+  // new vs returning) are often empty until Google finishes processing "today".
+  // Keep GA4's totals, and fall back to Insight's own tracker for every breakdown
+  // GA4 has not filled yet, so the detail cards are never blank.
   const acc = s?.ga4 ? await getGa4Account() : null;
   if (s?.ga4 && acc) {
     const g = await ga4TodayStats(acc.json, s.ga4.propertyId);
     if (g) {
       const out = fromGa4(g, { revenue, online: n(online[0]?.n), campaigns: campaignsOut, ai: aiOut, aiSeries, aiBots });
-      return { ...out, ...extras, ...ga4Extras(g), series: attachRev(out.series, revMap) };
+      const pick = <T>(a: T[], b: T[]): T[] => (a.length > 0 ? a : b);
+      const merged = {
+        ...out,
+        channels: pick(out.channels, native.channels),
+        referrers: pick(out.referrers, native.referrers),
+        pages: pick(out.pages, native.pages),
+        countries: pick(out.countries, native.countries),
+        devices: pick(out.devices, native.devices),
+        browsers: pick(out.browsers, native.browsers),
+        os: pick(out.os, native.os),
+        series: out.series.length > 0 ? out.series : nativeSeries,
+      };
+      // ga4Extras overrides landing/cities/regions/languages/new-vs-returning with
+      // GA4 values. Only apply it when GA4 actually returned intraday detail; when it
+      // did not, keep the tracker's extras so those cards (and the new/returning split
+      // that must reconcile with the total) stay populated instead of going blank.
+      const ga4HasDetail = out.channels.length > 0 || out.pages.length > 0 || out.series.length > 0;
+      const base = ga4HasDetail ? { ...merged, ...extras, ...ga4Extras(g) } : { ...merged, ...extras };
+      return { ...base, series: attachRev(merged.series, revMap) };
     }
   }
 
@@ -256,15 +291,9 @@ async function liveStats(site: string, all: boolean) {
     today: { visitors: n(today[0]?.visitors), pageviews: n(today[0]?.pageviews), avgDuration: Math.round(Number(avg[0]?.d ?? 0)), bounceRate },
     prev,
     ...extras,
-    channels: channels.map((r) => ({ name: r.key, type: r.key, count: n(r.c) })),
-    referrers: referrers.map((r) => ({ name: r.key, count: n(r.c) })),
+    ...native,
     campaigns: campaignsOut,
-    pages: pages.map((r) => ({ name: r.key || '/', count: n(r.c) })),
-    countries: countries.map((r) => ({ name: r.key, count: n(r.c) })),
-    devices: devices.map((r) => ({ name: r.key, count: n(r.c) })),
-    browsers: browsers.map((r) => ({ name: r.key, count: n(r.c) })),
-    os: os.map((r) => ({ name: r.key, count: n(r.c) })),
-    series: attachRev(series.map((r) => ({ t: r.h.length >= 13 ? `${r.h.slice(11, 13)}:00` : r.h, count: n(r.c) })), revMap),
+    series: attachRev(nativeSeries, revMap),
     ai: aiOut,
     aiSeries,
     aiBots,
