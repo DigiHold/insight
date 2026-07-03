@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { queryRows } from '@/lib/clickhouse';
-import { validSession } from '@/lib/auth';
+import { validSession, validApiToken, bearerFrom } from '@/lib/auth';
 import { getSite } from '@/lib/sites';
 import { getJson } from '@/lib/settings';
 import { stripeRevenue, stripeRevenueRange, stripeSeries, stripeSeriesRange, type Revenue, type RevenueBucket } from '@/lib/stripe';
@@ -175,7 +175,7 @@ function fromGa4(g: Ga4Stats, base: Base) {
 
 export async function GET(req: Request) {
   const session = (await cookies()).get('insight_session')?.value;
-  if (!validSession(session)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!validSession(session) && !validApiToken(bearerFrom(req))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const url = new URL(req.url);
   const site = url.searchParams.get('site') ?? 'all';

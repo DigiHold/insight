@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { validSession } from '@/lib/auth';
+import { validSession, validApiToken, bearerFrom } from '@/lib/auth';
 import { listSites, addSite, removeSite, setFavicon, setSiteUrl, toPublic } from '@/lib/sites';
 import { fetchAndSaveFavicon, deleteFavicon } from '@/lib/favicon';
 import { command } from '@/lib/clickhouse';
@@ -9,13 +9,15 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-async function authed(): Promise<boolean> {
+async function authed(req?: Request): Promise<boolean> {
+  // The read-only listing also accepts the CLI API token; mutations stay session-only.
+  if (req && validApiToken(bearerFrom(req))) return true;
   const s = (await cookies()).get('insight_session')?.value;
   return validSession(s);
 }
 
-export async function GET() {
-  if (!(await authed())) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+export async function GET(req: Request) {
+  if (!(await authed(req))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   return NextResponse.json({ sites: (await listSites()).map(toPublic) });
 }
 

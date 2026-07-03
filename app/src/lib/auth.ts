@@ -55,6 +55,21 @@ function verify(token: string, kind: string): boolean {
   return timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
 }
 
+// Read-only API token for the CLI. Set INSIGHT_API_TOKEN in the server env to a
+// long random string (openssl rand -hex 32). Empty token disables API access.
+export function validApiToken(token?: string): boolean {
+  const expected = process.env.INSIGHT_API_TOKEN ?? '';
+  if (!expected || !token) return false;
+  return safeEq(token, expected);
+}
+
+// Pull the bearer token out of an Authorization header, if present.
+export function bearerFrom(req: Request): string | undefined {
+  const h = req.headers.get('authorization');
+  const m = h ? /^Bearer\s+(.+)$/i.exec(h) : null;
+  return m ? m[1].trim() : undefined;
+}
+
 export function makeSession(days: number): string {
   return sign('session', Date.now() + days * 86400000);
 }
