@@ -35,16 +35,17 @@ export default function Login() {
     }
   }
 
-  async function submitCode(e: FormEvent) {
-    e.preventDefault();
-    if (busy) return;
+  // codeValue is passed explicitly so the auto-submit sends the digit just typed,
+  // not the stale state value from the previous render.
+  async function submitCode(codeValue: string) {
+    if (busy || codeValue.length !== 6) return;
     setBusy(true);
     setError('');
     try {
       const res = await fetch('/api/auth/totp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: codeValue }),
       });
       if (!res.ok) throw new Error('bad');
       window.location.href = '/';
@@ -86,17 +87,17 @@ export default function Login() {
             <p className="text-sm text-zinc-500 dark:text-zinc-400">Scan this QR code with Google Authenticator or 1Password, then enter the 6-digit code.</p>
             {qr && <img src={qr} alt="2FA QR" className="mx-auto size-44 rounded-lg bg-white p-2" />}
             <p className="break-all rounded-lg bg-zinc-100 px-3 py-2 text-center text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{secret}</p>
-            <form onSubmit={submitCode} className="space-y-3">
-              <CodeInput code={code} setCode={setCode} />
+            <form onSubmit={(e) => { e.preventDefault(); submitCode(code); }} className="space-y-3">
+              <CodeInput code={code} setCode={setCode} onComplete={submitCode} />
               <button disabled={busy} className="btn-primary w-full">Enable and sign in</button>
             </form>
           </div>
         )}
 
         {step === 'totp' && (
-          <form onSubmit={submitCode} className="space-y-3">
+          <form onSubmit={(e) => { e.preventDefault(); submitCode(code); }} className="space-y-3">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">Enter the 6-digit code from your authenticator app.</p>
-            <CodeInput code={code} setCode={setCode} />
+            <CodeInput code={code} setCode={setCode} onComplete={submitCode} />
             <button disabled={busy} className="btn-primary w-full">Sign in</button>
           </form>
         )}
@@ -107,7 +108,7 @@ export default function Login() {
   );
 }
 
-function CodeInput({ code, setCode }: { code: string; setCode: (v: string) => void }) {
+function CodeInput({ code, setCode, onComplete }: { code: string; setCode: (v: string) => void; onComplete: (code: string) => void }) {
   return (
     <input
       inputMode="numeric"
@@ -116,10 +117,11 @@ function CodeInput({ code, setCode }: { code: string; setCode: (v: string) => vo
       maxLength={6}
       value={code}
       onChange={(e) => {
-        const v = e.target.value.replace(/\D/g, '');
+        const v = e.target.value.replace(/\D/g, '').slice(0, 6);
         setCode(v);
-        // Submit as soon as the 6th digit lands (also covers iOS code autofill).
-        if (v.length === 6) e.target.form?.requestSubmit();
+        // Submit the fresh value as soon as the 6th digit lands (also covers
+        // iOS code autofill). Passing v avoids the stale-state race.
+        if (v.length === 6) onComplete(v);
       }}
       placeholder="123456"
       className="field text-center text-lg tracking-[0.3em]"
