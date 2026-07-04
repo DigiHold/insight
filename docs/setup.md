@@ -139,15 +139,29 @@ Revenue then shows over any period, net of refunds, with the new vs refunded spl
 
 When GA4 is connected, Insight reads Google Analytics live for the 7, 30 and 90 day periods, so those numbers match GA4 exactly, and it uses GA4's cities, regions and languages. Search Console adds your organic keywords.
 
-Today this uses a Google service account:
+This uses a Google service account, which is a robot Google account with its own
+email address that you let read your Analytics. It is free, and you create it once.
+The whole thing takes about five minutes.
 
-1. In Google Cloud, create a project and a service account, then create a JSON key for it.
-2. Enable the "Google Analytics Data API" and the "Google Search Console API" in that project.
-3. In GA4, go to Admin, Property Access Management, and add the service account email as a Viewer.
-4. In Search Console, add the same service account email as a user of the property.
-5. In Insight, click "Connect GA4", paste the JSON once, and enter your GA4 property ID.
+### 8a. Create the service account and its JSON key
 
-A one-click Google connection (OAuth) is described in section 11.
+1. Open the Google Cloud console at https://console.cloud.google.com and sign in with the Google account that owns your GA4 property.
+2. Create a project: click the project selector in the top bar, then "New project", give it a name such as `insight-analytics`, and click "Create". Wait a few seconds and make sure that project is selected in the top bar.
+3. Enable the APIs. Go to "APIs & Services" then "Library". Search for "Google Analytics Data API" and click "Enable". Then search for "Google Search Console API" and click "Enable" (skip this second one if you will not use Search Console).
+4. Create the service account. Go to "APIs & Services" then "Credentials", click "Create credentials", and choose "Service account". Give it a name such as `insight`, click "Create and continue", skip the optional role and access steps, and click "Done".
+5. Copy its email. You now have a service account with an email that looks like `insight@your-project-id.iam.gserviceaccount.com`. Google builds this address automatically from the name and your project id, so yours is different from anyone else's. This is the address you will grant access to.
+6. Create the JSON key. Click the service account you just made, open the "Keys" tab, click "Add key" then "Create new key", pick "JSON", and click "Create". A `.json` file downloads. That file is the key Insight needs. Keep it private and never commit it.
+
+### 8b. Grant access and connect
+
+7. In GA4, click Admin, then Property Access Management, then the "+" and "Add users". Paste the service account email from step 5, set the role to Viewer, uncheck "Notify by email", and click Add.
+8. For Search Console (optional), open your property's Settings, then Users and permissions, add the same email, and give it "Full" or "Restricted" access.
+9. In Insight, click "Connect GA4", paste the contents of the JSON file once (it is saved globally and reused for every site), and enter your GA4 property id. You find the property id in GA4 under Admin, Property, Property Settings (a number like `123456789`).
+
+After the JSON is saved, the Connect dialog shows your own service account email so you can copy it into GA4, and each site only needs its property id.
+
+A one-click Google connection (OAuth), which replaces the whole service account
+flow with a single consent popup, is described in section 11.
 
 ## 9. Turn on events: signups, purchases, and exact attribution
 
