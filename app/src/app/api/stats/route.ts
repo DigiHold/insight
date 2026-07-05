@@ -272,8 +272,81 @@ async function liveStats(site: string, all: boolean) {
   };
 }
 
-// History. If GA4 is connected, we read GA4 live over the exact period (numbers = GA4).
-// Otherwise (GA4 removed, or "all sites"), we aggregate the Insight tracker from ClickHouse.
+type NamedCount = { name: string; count: number };
+type Channel = { name: string; type: string; count: number };
+
+// Sum two breakdown lists by key. Used to stitch the native tracker (recent days)
+// with GA4 (days before Insight was installed) into one card.
+function mergeCounts(a: NamedCount[], b: NamedCount[], limit = 50): NamedCount[] {
+  const m = new Map<string, number>();
+  for (const r of [...a, ...b]) m.set(r.name, (m.get(r.name) ?? 0) + r.count);
+  return [...m.entries()].map(([name, count]) => ({ name, count })).sort((x, y) => y.count - x.count).slice(0, limit);
+}
+function mergeChannels(a: Channel[], b: Channel[]): Channel[] {
+  const m = new Map<string, { type: string; count: number }>();
+  for (const r of [...a, ...b]) { const e = m.get(r.name); m.set(r.name, { type: r.type || e?.type || r.name, count: (e?.count ?? 0) + r.count }); }
+  return [...m.entries()].map(([name, v]) => ({ name, type: v.type, count: v.count })).sort((x, y) => y.count - x.count);
+}
+const wavg = (v1: number, w1: number, v2: number, w2: number): number => { const w = w1 + w2; return w > 0 ? Math.round((v1 * w1 + v2 * w2) / w) : 0; };
+const isoDaysAgo = (days: number): string => new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+const isoDayBefore = (d: string): string => new Date(new Date(`${d}T00:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10);
+
+// First day the Insight tracker saw a pageview for this site (its install date), or null.
+async function firstEventDate(site: string): Promise<string | null> {
+  const rows = await queryRows<{ d: string }>(`SELECT toString(toDate(min(ts))) AS d FROM events WHERE event_type = 'pageview' AND site_id = {site:String}`, { site }).catch(() => [] as { d: string }[]);
+  const d = rows[0]?.d;
+  return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
+}
+
+type NativeResult = Awaited<ReturnType<typeof eventsHistory>> & Extras;
+
+// Stitch the native result (Insight, recent days) with GA4 (older days, before
+// install). GA4 is the older segment, native the newer; their date ranges are
+// disjoint, so counts add and the daily series concatenates.
+function stitchGa4(native: NativeResult, g: Ga4Stats, base: Base, revMap: Record<string, RevenueBucket> | null): NativeResult {
+  const gOut = fromGa4(g, base);
+  const gEx = ga4Extras(g);
+  const nv = native.today.visitors, gv = g.visitors;
+  const series = attachRev(
+    [...gOut.series, ...native.series.map((p) => ({ t: p.t, count: p.count }))].sort((a, b) => a.t.localeCompare(b.t)),
+    revMap,
+  );
+  return {
+    ...native,
+    today: {
+      visitors: nv + gv,
+      pageviews: native.today.pageviews + g.pageviews,
+      avgDuration: wavg(native.today.avgDuration, nv, g.avgDuration, gv),
+      bounceRate: wavg(native.today.bounceRate, nv, g.bounceRate, gv),
+    },
+    prev: {
+      visitors: native.prev.visitors + (g.prev?.visitors ?? 0),
+      pageviews: native.prev.pageviews + (g.prev?.pageviews ?? 0),
+      avgDuration: native.prev.avgDuration || g.prev?.avgDuration || 0,
+      bounceRate: native.prev.bounceRate || g.prev?.bounceRate || 0,
+    },
+    channels: mergeChannels(native.channels, gOut.channels),
+    referrers: mergeCounts(native.referrers, gOut.referrers),
+    pages: mergeCounts(native.pages, gOut.pages),
+    countries: mergeCounts(native.countries, gOut.countries),
+    devices: mergeCounts(native.devices, gOut.devices),
+    browsers: mergeCounts(native.browsers, gOut.browsers),
+    os: mergeCounts(native.os, gOut.os),
+    landing: mergeCounts(native.landing, gEx.landing ?? []),
+    cities: mergeCounts(native.cities, gEx.cities ?? []),
+    regions: mergeCounts(native.regions, gEx.regions ?? []),
+    languages: mergeCounts(native.languages, gEx.languages ?? []),
+    visitorSplit: g.split
+      ? { newV: native.visitorSplit.newV + g.split.newV, returning: native.visitorSplit.returning + g.split.returning }
+      : native.visitorSplit,
+    series,
+  };
+}
+
+// History. Insight's own tracker is the base for every day it has data. GA4 only
+// backfills the days before Insight was installed on the site, so a 90-day view can
+// be Insight for the recent weeks plus GA4 for the older ones, while 7/30-day views
+// that sit entirely after install are pure Insight.
 async function historyStats(site: string, all: boolean, period: string, from?: string, to?: string) {
   const custom = period === 'custom' && !!from && !!to;
   const days = custom
@@ -306,17 +379,25 @@ async function historyStats(site: string, all: boolean, period: string, from?: s
   const beforeExpr = custom ? 'ts < toDateTime({from:String})' : `ts < now() - INTERVAL ${days} DAY`;
   const extras = await extraData(site, all, filter, params, win, beforeExpr);
 
-  const acc = s?.ga4 ? await getGa4Account() : null;
-  if (s?.ga4 && acc) {
-    const g = custom
-      ? await ga4RangeStats(acc.json, s.ga4.propertyId, from as string, to as string)
-      : await ga4LiveStats(acc.json, s.ga4.propertyId, days);
-    if (g) {
-      const out = fromGa4(g, base);
-      return { ...out, ...extras, ...ga4Extras(g), series: attachRev(out.series, revMap) };
+  const native: NativeResult = { ...(await eventsHistory(filter, params, days, base, revMap, win, pwin)), ...extras };
+
+  const acc = !all && s?.ga4 ? await getGa4Account() : null;
+  if (!all && s?.ga4 && acc) {
+    const insightStart = await firstEventDate(site);
+    const periodStart = custom ? (from as string) : isoDaysAgo(days);
+    if (insightStart && periodStart < insightStart) {
+      // The period reaches before Insight existed: fill only those older days from GA4.
+      const g = await ga4RangeStats(acc.json, s.ga4.propertyId, periodStart, isoDayBefore(insightStart));
+      if (g) return stitchGa4(native, g, base, revMap);
+    } else if (!insightStart) {
+      // The tracker has never seen this site: fall back to GA4 for the whole period.
+      const g = custom
+        ? await ga4RangeStats(acc.json, s.ga4.propertyId, from as string, to as string)
+        : await ga4LiveStats(acc.json, s.ga4.propertyId, days);
+      if (g) { const out = fromGa4(g, base); return { ...out, ...extras, ...ga4Extras(g), series: attachRev(out.series, revMap) }; }
     }
   }
-  return { ...(await eventsHistory(filter, params, days, base, revMap, win, pwin)), ...extras };
+  return native;
 }
 
 // Aggregates history from the Insight tracker (ClickHouse), series by day.
