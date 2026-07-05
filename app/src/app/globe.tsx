@@ -14,7 +14,7 @@ const prefersDark = (): boolean => { try { return window.matchMedia('(prefers-co
 
 interface Visitor {
   id: string; country: string; device: string; browser: string; os: string;
-  source: string; path: string; sessionSec: number; visits: number; pages: string[];
+  source: string; path: string; sessionSec: number; active?: boolean; visits: number; pages: string[];
 }
 interface LiveData { online?: number; countries: { country: string; count: number }[]; visitors: Visitor[] }
 
@@ -115,7 +115,9 @@ function cardHTML(v: Visitor): string {
     <div style="border-top:1px solid rgba(255,255,255,.1);padding:12px 16px;font-size:14px;display:flex;flex-direction:column;gap:6px">
       <div style="${KROW}"><span style="color:#a1a1aa">Referrer</span><span style="display:flex;align-items:center;gap:6px;min-width:0;color:#f4f4f5">${ref}</span></div>
       <div style="${KROW}"><span style="color:#a1a1aa;flex:none">Current URL</span><span style="font-family:monospace;font-size:12px;color:#f4f4f5;${TRUNC}">${esc(v.path || '/')}</span></div>
-      <div style="${KROW}"><span style="color:#a1a1aa">Session time</span><span class="insight-session" data-start="${start}" style="color:#f4f4f5">${fmtDur(v.sessionSec)}</span></div>
+      <div style="${KROW}"><span style="color:#a1a1aa">Session time</span>${v.active
+        ? `<span class="insight-session" data-start="${start}" style="color:#f4f4f5">${fmtDur(v.sessionSec)}</span>`
+        : `<span style="color:#f4f4f5">${fmtDur(v.sessionSec)}</span>`}</div>
       <div style="${KROW}"><span style="color:#a1a1aa">Total visits</span><span style="color:#f4f4f5">${v.visits}</span></div>
     </div>
     ${pages}

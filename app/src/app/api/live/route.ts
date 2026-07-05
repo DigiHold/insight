@@ -75,6 +75,7 @@ export async function GET(req: Request) {
         const list = (v.ts_list ?? []).map(Number).filter((n) => Number.isFinite(n));
         const start = streakStart(list);
         const now = Number(v.now_ts);
+        const lastTs = list.length ? list[list.length - 1] : 0;
         return {
           id: v.visitor_id,
           country: v.country,
@@ -83,7 +84,12 @@ export async function GET(req: Request) {
           os: v.os,
           source: v.source,
           path: v.current_path,
-          sessionSec: start > 0 ? Math.max(0, now - start) : 0,
+          // Time up to the visitor's last signal, not "now": once they leave, the
+          // marker lingers ~45s but the session time must not keep counting the void.
+          sessionSec: start > 0 && lastTs > 0 ? Math.max(0, lastTs - start) : 0,
+          // Still pinging (interacted within the last ping cycle). Only then does the
+          // client counter tick live; otherwise it stays frozen at the real duration.
+          active: lastTs > 0 && now - lastTs <= 25,
           visits: Number(v.visits),
           pages: v.pages ?? [],
         };
