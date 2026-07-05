@@ -70,24 +70,21 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   var _replace = history.replaceState;
   history.replaceState = function () { _replace.apply(this, arguments); route(); };
   window.addEventListener('popstate', route);
-  // Heartbeat based on real ENGAGEMENT, like GA4 ("foreground/focus time").
-  // A visitor is counted as "live" only if the tab is (1) visible, (2) in the foreground (focus),
-  // and (3) has interacted (mouse/scroll/keyboard/touch) within the last 60 seconds.
-  // As a result, a tab left open but abandoned, or a background window on a
-  // second screen, stops pinging and disappears from live in ~1min instead of staying "present" for 2h.
-  // It comes back instantly as soon as you scroll or regain focus.
-  var IDLE_MS = 60000;
-  var lastActive = Date.now();
+  // Heartbeat based on ENGAGEMENT, like GA4 ("foreground time"). A visitor is "live"
+  // while the tab is (1) visible and (2) in the foreground (focused). No interaction is
+  // required, so someone reading an article without scrolling still counts. Switching
+  // tab, minimizing, or locking the screen drops the visibility/focus and they go offline.
   var visMs = 0;
   var visSince = document.visibilityState === 'visible' ? Date.now() : 0;
   var lastSent = -1;
-  var focused = document.hasFocus();
-  // Any interaction implies focus: we refresh the activity AND reassert focus,
-  // which avoids a false "non-focus" state on load in some browsers.
-  function bump() { lastActive = Date.now(); focused = true; }
+  // Assume focus when the page loads visible; mobile browsers rarely fire focus events,
+  // so we lean on visibility there and only clear focus on an explicit blur.
+  var focused = !document.hidden;
+  // Any interaction reasserts focus, in case a focus event was missed.
+  function bump() { focused = true; }
   var acts = ['mousemove', 'mousedown', 'keydown', 'scroll', 'wheel', 'touchstart', 'pointerdown'];
   for (var i = 0; i < acts.length; i++) window.addEventListener(acts[i], bump, { passive: true, capture: true });
-  function engaged() { return document.visibilityState === 'visible' && focused && (Date.now() - lastActive) < IDLE_MS; }
+  function engaged() { return document.visibilityState === 'visible' && focused; }
   // "Avg time" is how long the page was actually VISIBLE (the foreground tab),
   // accumulated across tab switches and capped at 30 min. This avoids the wall-clock
   // inflation of a tab left open, and unlike a 15s-tick engagement counter it does not
