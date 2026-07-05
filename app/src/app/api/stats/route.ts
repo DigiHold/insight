@@ -6,7 +6,7 @@ import { getSite } from '@/lib/sites';
 import { getJson } from '@/lib/settings';
 import { stripeRevenue, stripeRevenueRange, stripeSeries, stripeSeriesRange, type Revenue, type RevenueBucket } from '@/lib/stripe';
 import { getGa4Account } from '@/lib/ga4-account';
-import { ga4LiveStats, ga4RangeStats, ga4TodayStats, type Ga4Stats } from '@/lib/ga4';
+import { ga4LiveStats, ga4RangeStats, type Ga4Stats } from '@/lib/ga4';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -252,28 +252,11 @@ async function liveStats(site: string, all: boolean) {
   if (s?.stripeKey) revenue = await stripeRevenue(s.stripeKey, 1);
   const revMap = s?.stripeKey ? await stripeSeries(s.stripeKey, 1) : null;
 
-  // If GA4 is connected, "Today" totals come from GA4 (same numbers as in GA4).
-  // GA4 delivers the headline totals for the in-progress day instantly, but its
-  // per-dimension breakdowns (channels, pages, hourly series, landing, cities,
-  // new vs returning) are often empty until Google finishes processing "today".
-  // Keep GA4's totals, and fall back to Insight's own tracker for every breakdown
-  // GA4 has not filled yet, so the detail cards are never blank.
-  const acc = s?.ga4 ? await getGa4Account() : null;
-  if (s?.ga4 && acc) {
-    const g = await ga4TodayStats(acc.json, s.ga4.propertyId);
-    // Only use GA4 for "Today" when it has actually published intraday breakdowns.
-    // Otherwise the header would show GA4 totals while every card falls back to the
-    // native tracker, two different measurement systems that never reconcile. In that
-    // case fall through to the fully-native path below: the tracker is real-time and
-    // complete, so header and cards come from one source and add up.
-    const ga4HasDetail = g && (g.sources.length > 0 || g.pages.length > 0 || g.series.length > 0);
-    if (g && ga4HasDetail) {
-      const out = fromGa4(g, { revenue, online: n(online[0]?.n), campaigns: campaignsOut, ai: aiOut, aiSeries, aiBots });
-      const merged = { ...out, series: out.series.length > 0 ? out.series : nativeSeries };
-      return { ...merged, ...extras, ...ga4Extras(g), series: attachRev(merged.series, revMap) };
-    }
-  }
-
+  // "Today" always comes from Insight's own tracker, even when GA4 is connected.
+  // GA4's intraday data is partial and delayed (often a handful of hits while the
+  // tracker already sees the full day), so mixing GA4 totals with tracker breakdowns
+  // never reconciled. The tracker is real-time and complete, so the header and every
+  // card share one source and add up. GA4 still powers the history periods below.
   return {
     revenue,
     online: n(online[0]?.n),
