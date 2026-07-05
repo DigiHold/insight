@@ -31,6 +31,7 @@ Fill in `.env`:
 - `AUTH_SECRET` a long random string (`openssl rand -hex 32`). This also salts visitor hashing, so keep it stable.
 - `ADMIN_EMAIL` and `ADMIN_PASSWORD` your dashboard login.
 - `MAPBOX_TOKEN` a Mapbox public token, restricted to your domain (see section 6).
+- `INSIGHT_TZ` (optional) your timezone as an IANA name, for example `Europe/Zurich`. It decides when "today" starts and drives the heatmap, retention weeks and the revenue overlay. Defaults to `UTC`.
 
 Then start it:
 

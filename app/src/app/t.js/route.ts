@@ -57,6 +57,21 @@ const SCRIPT = `/* Insight — cookieless analytics. */
     } catch (e) {}
   }
   send('pageview');
+  // Single-page apps (React, Next, Vue...) change the URL without reloading, so a
+  // plain load-time pageview would miss every client-side navigation. We wrap the
+  // History API and listen to popstate to record a pageview on each real path change.
+  var lastPath = location.pathname;
+  function route() {
+    if (location.pathname === lastPath) return;
+    lastPath = location.pathname;
+    sent = false;
+    send('pageview');
+  }
+  var _push = history.pushState;
+  history.pushState = function () { _push.apply(this, arguments); route(); };
+  var _replace = history.replaceState;
+  history.replaceState = function () { _replace.apply(this, arguments); route(); };
+  window.addEventListener('popstate', route);
   // Heartbeat based on real ENGAGEMENT, like GA4 ("foreground/focus time").
   // A visitor is counted as "live" only if the tab is (1) visible, (2) in the foreground (focus),
   // and (3) has interacted (mouse/scroll/keyboard/touch) within the last 60 seconds.

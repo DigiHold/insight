@@ -773,10 +773,16 @@ function ChartTooltip({ active, payload, label, currency, hasRevenue }: { active
 }
 
 function Delta({ change, inverse }: { change: number; inverse?: boolean }) {
-  const rose = inverse ? change > 0 : change < 0;
+  const flat = change === 0;
+  const rose = !flat && (inverse ? change > 0 : change < 0);
+  const cls = flat
+    ? 'bg-zinc-500/10 text-zinc-500 dark:text-zinc-400'
+    : rose
+      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+      : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
   return (
-    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${rose ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
-      {change >= 0 ? '↑' : '↓'} {Math.abs(change)}%
+    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${cls}`}>
+      {flat ? '→' : change > 0 ? '↑' : '↓'} {Math.abs(change)}%
     </span>
   );
 }

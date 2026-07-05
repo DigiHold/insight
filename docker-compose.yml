@@ -18,6 +18,9 @@ services:
       - CLICKHOUSE_USER=default
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
       - SQLITE_PATH=/data/insight.db
+      # Analytics timezone for "Today", the heatmap, retention and revenue.
+      # Any IANA name (e.g. Europe/Zurich). Defaults to UTC.
+      - INSIGHT_TZ=${INSIGHT_TZ:-UTC}
       - AUTH_SECRET=${AUTH_SECRET}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}

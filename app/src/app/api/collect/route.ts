@@ -60,7 +60,11 @@ export async function POST(req: Request) {
   // show up as visitors (for example a fake "US" visitor coming from a datacenter).
   if (isBot(ua)) return new NextResponse(null, { status: 204, headers: CORS });
   const ip = clientIp(req.headers);
-  const selfHost = (process.env.PUBLIC_HOST ?? '').replace(/^www\./, '');
+  // Self-referral = the tracked site linking to itself (internal navigation). Compare
+  // the referrer to the PAGE's own host, not the Insight instance host, so multi-site
+  // installs don't log internal clicks as "referral" from their own domain.
+  const pageHost = (() => { try { return new URL(str(b.url)).hostname.replace(/^www\./, ''); } catch { return ''; } })();
+  const selfHost = pageHost || (process.env.PUBLIC_HOST ?? '').replace(/^www\./, '');
   const src = classifySource(str(b.referrer), str(b.utm_source), selfHost);
   const uaInfo = parseUa(ua);
 
@@ -113,8 +117,8 @@ export async function POST(req: Request) {
     browser: uaInfo.browser,
     os: uaInfo.os,
     language: str(b.lang).slice(0, 16),
-    screen_w: Math.min(num(b.sw), 65535),
-    duration_ms: Math.min(num(b.duration_ms), 4294967295),
+    screen_w: Math.max(0, Math.min(num(b.sw), 65535)),
+    duration_ms: Math.max(0, Math.min(num(b.duration_ms), 1800000)),
   };
 
   try {

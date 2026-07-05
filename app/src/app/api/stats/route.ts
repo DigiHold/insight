@@ -17,6 +17,10 @@ interface TsRow { h: string; c: string }
 
 const n = (v: string | undefined): number => (v ? Number(v) : 0);
 
+// Normalize a path so funnel steps match pageviews regardless of a trailing slash
+// (e.g. "/pricing/" and "/pricing" are the same step). Root "/" stays "/".
+const normPath = (p: string): string => { const t = p.replace(/\/+$/, ''); return t === '' ? '/' : t; };
+
 function ga4Type(name: string): string {
   const s = name.toLowerCase();
   if (/google|bing|duckduckgo|yahoo|ecosia|brave|qwant/.test(s)) return 'search';
@@ -67,7 +71,7 @@ interface RevRow { key: string; amount: string }
 // Extra breakdowns computed from the tracker (ClickHouse), shared by the
 // live and history paths. win = current window condition; beforeExpr =
 // "before the window" condition used for new vs returning.
-async function extraData(site: string, all: boolean, filter: string, params: Record<string, unknown> | undefined, win: string, beforeExpr: string) {
+async function extraData(site: string, all: boolean, filter: string, params: Record<string, unknown> | undefined, win: string, beforeExpr: string, funnelWindowSec: number) {
   const pv = `event_type = 'pageview' AND ${win}${filter}`;
   // Each extra query is independently fail-safe: a single broken query returns
   // an empty list instead of taking down the whole dashboard.
@@ -88,13 +92,13 @@ async function extraData(site: string, all: boolean, filter: string, params: Rec
     safe(queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE ${pv} AND visitor_id IN (SELECT visitor_id FROM events WHERE event_type = 'pageview' AND ${beforeExpr}${filter})`, params)),
     safe(queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE ${pv}`, params)),
     safe(queryRows<HeatCell>(`SELECT toDayOfWeek(ts) AS d, toHour(ts) AS h, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 28 DAY${filter} GROUP BY d, h`, params)),
-    safe(queryRows<CohortRow>(`SELECT toString(coh) AS cohort, dateDiff('week', coh, wk) AS offset, uniqExact(vid) AS n FROM (SELECT e.visitor_id AS vid, e.wk AS wk, f.cohort AS coh FROM (SELECT visitor_id, toStartOfWeek(ts) AS wk FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 63 DAY${filter} GROUP BY visitor_id, wk) AS e INNER JOIN (SELECT visitor_id, min(toStartOfWeek(ts)) AS cohort FROM events WHERE event_type = 'pageview'${filter} GROUP BY visitor_id HAVING min(toStartOfWeek(ts)) >= toStartOfWeek(now() - INTERVAL 63 DAY)) AS f ON e.visitor_id = f.visitor_id WHERE e.wk >= f.cohort) GROUP BY coh, offset ORDER BY coh, offset`, params)),
+    safe(queryRows<CohortRow>(`SELECT toString(coh) AS cohort, dateDiff('week', coh, wk) AS offset, uniqExact(vid) AS n FROM (SELECT e.visitor_id AS vid, e.wk AS wk, f.cohort AS coh FROM (SELECT visitor_id, toStartOfWeek(ts, 1) AS wk FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 63 DAY${filter} GROUP BY visitor_id, wk) AS e INNER JOIN (SELECT visitor_id, min(toStartOfWeek(ts, 1)) AS cohort FROM events WHERE event_type = 'pageview'${filter} GROUP BY visitor_id HAVING min(toStartOfWeek(ts, 1)) >= toStartOfWeek(now() - INTERVAL 63 DAY, 1)) AS f ON e.visitor_id = f.visitor_id WHERE e.wk >= f.cohort) GROUP BY coh, offset ORDER BY coh, offset`, params)),
     safe(queryRows<RevRow>(`SELECT source AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} GROUP BY key ORDER BY amount DESC LIMIT 30`, params)),
     safe(queryRows<RevRow>(`SELECT campaign AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} AND campaign != '' GROUP BY key ORDER BY amount DESC LIMIT 30`, params)),
     funnelSteps.length >= 2
       ? safe(queryRows<{ level: string; c: string }>(
-          `SELECT level, count() AS c FROM (SELECT visitor_id, windowFunnel(604800)(ts, ${funnelSteps.map((_, i) => `pathname = {f${i}:String}`).join(', ')}) AS level FROM events WHERE ${pv} GROUP BY visitor_id) WHERE level > 0 GROUP BY level`,
-          { ...(params ?? {}), ...Object.fromEntries(funnelSteps.map((p, i) => [`f${i}`, p])) },
+          `SELECT level, count() AS c FROM (SELECT visitor_id, windowFunnel(${funnelWindowSec})(ts, ${funnelSteps.map((_, i) => `if(pathname = '/', '/', replaceRegexpOne(pathname, '/+$', '')) = {f${i}:String}`).join(', ')}) AS level FROM events WHERE ${pv} GROUP BY visitor_id) WHERE level > 0 GROUP BY level`,
+          { ...(params ?? {}), ...Object.fromEntries(funnelSteps.map((p, i) => [`f${i}`, normPath(p)])) },
         ))
       : Promise.resolve([] as { level: string; c: string }[]),
   ]);
@@ -221,7 +225,7 @@ async function liveStats(site: string, all: boolean) {
     queryRows<OneRow>(`SELECT countIf(pv = 1) AS bounced, count() AS sessions FROM (SELECT visitor_id, countIf(event_type = 'pageview') AS pv FROM events WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < now() - INTERVAL 1 DAY${filter} GROUP BY visitor_id)`, params),
   ]);
 
-  const extras = await extraData(site, all, filter, params, 'ts >= toStartOfDay(now())', 'ts < toStartOfDay(now())');
+  const extras = await extraData(site, all, filter, params, 'ts >= toStartOfDay(now())', 'ts < toStartOfDay(now())', 86400);
   const sessions = n(bounce[0]?.sessions);
   const bounceRate = sessions > 0 ? Math.round((n(bounce[0]?.bounced) / sessions) * 100) : 0;
   const prevSessions = n(prevBounce[0]?.sessions);
@@ -307,8 +311,12 @@ function stitchGa4(native: NativeResult, g: Ga4Stats, base: Base, revMap: Record
   const gOut = fromGa4(g, base);
   const gEx = ga4Extras(g);
   const nv = native.today.visitors, gv = g.visitors;
+  // Merge the two daily series by date so a day present in both sources (boundary
+  // overlap) becomes one summed point instead of two bars on the same label.
+  const byDate = new Map<string, number>();
+  for (const p of [...gOut.series, ...native.series]) byDate.set(p.t, (byDate.get(p.t) ?? 0) + p.count);
   const series = attachRev(
-    [...gOut.series, ...native.series.map((p) => ({ t: p.t, count: p.count }))].sort((a, b) => a.t.localeCompare(b.t)),
+    [...byDate.entries()].map(([t, count]) => ({ t, count })).sort((a, b) => a.t.localeCompare(b.t)),
     revMap,
   );
   return {
@@ -377,7 +385,7 @@ async function historyStats(site: string, all: boolean, period: string, from?: s
   const base: Base = { revenue, online, campaigns: [], ai, aiSeries, aiBots };
 
   const beforeExpr = custom ? 'ts < toDateTime({from:String})' : `ts < now() - INTERVAL ${days} DAY`;
-  const extras = await extraData(site, all, filter, params, win, beforeExpr);
+  const extras = await extraData(site, all, filter, params, win, beforeExpr, days * 86400);
 
   const native: NativeResult = { ...(await eventsHistory(filter, params, days, base, revMap, win, pwin)), ...extras };
 

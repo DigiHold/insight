@@ -1,4 +1,5 @@
 import { createClient, type ClickHouseClient } from '@clickhouse/client';
+import { TZ } from './tz';
 
 let client: ClickHouseClient | null = null;
 
@@ -9,6 +10,9 @@ export function ch(): ClickHouseClient {
       username: process.env.CLICKHOUSE_USER ?? 'default',
       password: process.env.CLICKHOUSE_PASSWORD ?? '',
       database: process.env.CLICKHOUSE_DB ?? 'insight',
+      // Every now()/toStartOfDay/toDate/toHour/toDayOfWeek/toStartOfWeek runs in this
+      // timezone, so "Today", the heatmap and retention match the site owner's day.
+      clickhouse_settings: { session_timezone: TZ },
     });
   }
   return client;

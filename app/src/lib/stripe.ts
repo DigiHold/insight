@@ -1,4 +1,5 @@
 // Stripe revenue per site: lists today's and yesterday's charges, cached for 60s.
+import { tzDateLabel, tzHourLabel, tzStartOfDayUnix } from './tz';
 
 export interface Revenue {
   currency: string;
@@ -35,13 +36,16 @@ export async function validateKey(key: string): Promise<boolean> {
 interface ChargeMore { data?: Charge[]; has_more?: boolean }
 
 // Sum of paid charges (net of refunds) over [gte, lt], with pagination.
+// Amounts are kept PER CURRENCY (never added across currencies), and the reported
+// figures are the account's dominant currency (the one with the most gross). Every
+// paid charge is counted, including refunded ones, so `count` matches `gross`.
 async function sumCharges(key: string, gte: number, lt: number): Promise<{ sum: number; gross: number; refunds: number; count: number; currency: string }> {
-  let gross = 0;
-  let refunds = 0;
-  let count = 0;
-  let currency = 'usd';
+  const grossBy = new Map<string, number>();
+  const refundBy = new Map<string, number>();
+  const countBy = new Map<string, number>();
   let after = '';
-  for (let page = 0; page < 20; page++) {
+  // Cap high enough to never truncate a real account (200 pages = 20k charges/window).
+  for (let page = 0; page < 200; page++) {
     const u = new URL('https://api.stripe.com/v1/charges');
     u.searchParams.set('limit', '100');
     u.searchParams.set('created[gte]', String(gte));
@@ -53,15 +57,21 @@ async function sumCharges(key: string, gte: number, lt: number): Promise<{ sum: 
     const data = json.data ?? [];
     for (const ch of data) {
       if (!ch.paid) continue;
-      currency = ch.currency ?? currency;
-      gross += (ch.amount ?? 0) / 100;
-      refunds += (ch.amount_refunded ?? 0) / 100;
-      if (!ch.refunded) count += 1;
+      const cur = ch.currency ?? 'usd';
+      grossBy.set(cur, (grossBy.get(cur) ?? 0) + (ch.amount ?? 0) / 100);
+      refundBy.set(cur, (refundBy.get(cur) ?? 0) + (ch.amount_refunded ?? 0) / 100);
+      countBy.set(cur, (countBy.get(cur) ?? 0) + 1);
     }
     if (!json.has_more || data.length === 0) break;
     after = data[data.length - 1].id ?? '';
     if (!after) break;
   }
+  let currency = 'usd';
+  let best = -1;
+  for (const [cur, g] of grossBy) if (g > best) { best = g; currency = cur; }
+  const gross = grossBy.get(currency) ?? 0;
+  const refunds = refundBy.get(currency) ?? 0;
+  const count = countBy.get(currency) ?? 0;
   return { sum: gross - refunds, gross, refunds, count, currency };
 }
 
@@ -72,10 +82,8 @@ async function fetchRevenue(key: string, days: number): Promise<Revenue | null> 
   let prevStart: number;
   let prevEnd: number;
   if (days <= 1) {
-    const d = new Date();
-    d.setUTCHours(0, 0, 0, 0);
-    curStart = Math.floor(d.getTime() / 1000);
-    prevStart = curStart - 86400;
+    curStart = tzStartOfDayUnix(0);
+    prevStart = tzStartOfDayUnix(1);
     prevEnd = curStart;
   } else {
     const span = days * 86400;
@@ -100,7 +108,7 @@ async function seriesBetween(key: string, gte: number, lt: number, hourly: boole
   const out: Record<string, RevenueBucket> = {};
   try {
     let after = '';
-    for (let page = 0; page < 20; page++) {
+    for (let page = 0; page < 200; page++) {
       const u = new URL('https://api.stripe.com/v1/charges');
       u.searchParams.set('limit', '100');
       u.searchParams.set('created[gte]', String(gte));
@@ -114,10 +122,7 @@ async function seriesBetween(key: string, gte: number, lt: number, hourly: boole
         if (!ch.paid) continue;
         const refunded = (ch.amount_refunded ?? 0) / 100;
         const net = (ch.amount ?? 0) / 100 - refunded;
-        const dt = new Date((ch.created ?? 0) * 1000);
-        const label = hourly
-          ? `${String(dt.getUTCHours()).padStart(2, '0')}:00`
-          : `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+        const label = hourly ? tzHourLabel(ch.created ?? 0) : tzDateLabel(ch.created ?? 0);
         const cur = out[label] ?? { n: 0, r: 0 };
         cur.n += net;
         cur.r += refunded;
@@ -139,9 +144,7 @@ export async function stripeSeries(key: string, days: number): Promise<Record<st
   if (hit && Date.now() - hit.ts < 60000) return hit.data;
   const now = Math.floor(Date.now() / 1000);
   const today = days <= 1;
-  let gte: number;
-  if (today) { const d = new Date(); d.setUTCHours(0, 0, 0, 0); gte = Math.floor(d.getTime() / 1000); }
-  else gte = now - days * 86400;
+  const gte = today ? tzStartOfDayUnix(0) : now - days * 86400;
   const data = await seriesBetween(key, gte, now, today);
   seriesCache.set(ck, { ts: Date.now(), data });
   return data;
