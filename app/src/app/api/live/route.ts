@@ -53,7 +53,7 @@ export async function GET(req: Request) {
                 argMax(browser, ts) AS browser,
                 argMax(source, ts) AS source,
                 argMax(os, ts) AS os,
-                argMaxIf(pathname, ts, event_type = 'pageview') AS current_path,
+                argMax(pathname, ts) AS current_path,
                 toUnixTimestamp(now()) AS now_ts,
                 countIf(event_type = 'pageview') AS visits,
                 arraySlice(arrayReverse(groupArrayIf(pathname, event_type = 'pageview')), 1, 8) AS pages,
