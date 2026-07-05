@@ -203,25 +203,25 @@ async function liveStats(site: string, all: boolean) {
   const [online, today, channels, referrers, pages, countries, series, aiRes, avg, bounce, devices, browsers, os, campaigns, prevToday, prevAvg, prevBounce] = await Promise.all([
     queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 45 SECOND${filter}`, params),
     queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS visitors, countIf(event_type = 'pageview') AS pageviews FROM events WHERE ts >= toStartOfDay(now())${filter}`, params),
-    queryRows<CountRow>(`SELECT source_type AS key, count() AS c FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 1 DAY${filter} GROUP BY source_type ORDER BY c DESC`, params),
-    queryRows<CountRow>(`SELECT domain(referrer) AS key, count() AS c FROM events WHERE event_type = 'pageview' AND referrer != '' AND ts >= now() - INTERVAL 1 DAY${filter} GROUP BY key ORDER BY c DESC LIMIT 50`, params),
-    queryRows<CountRow>(`SELECT pathname AS key, count() AS c FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 1 DAY${filter} GROUP BY pathname ORDER BY c DESC LIMIT 50`, params),
-    queryRows<CountRow>(`SELECT country AS key, count() AS c FROM events WHERE event_type = 'pageview' AND country != '' AND ts >= now() - INTERVAL 1 DAY${filter} GROUP BY country ORDER BY c DESC LIMIT 50`, params),
-    queryRows<TsRow>(`SELECT toStartOfHour(ts) AS h, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 24 HOUR${filter} GROUP BY h ORDER BY h`, params),
+    queryRows<CountRow>(`SELECT source_type AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND ts >= toStartOfDay(now())${filter} GROUP BY source_type ORDER BY c DESC`, params),
+    queryRows<CountRow>(`SELECT domain(referrer) AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND referrer != '' AND ts >= toStartOfDay(now())${filter} GROUP BY key ORDER BY c DESC LIMIT 50`, params),
+    queryRows<CountRow>(`SELECT pathname AS key, count() AS c FROM events WHERE event_type = 'pageview' AND ts >= toStartOfDay(now())${filter} GROUP BY pathname ORDER BY c DESC LIMIT 50`, params),
+    queryRows<CountRow>(`SELECT country AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND country != '' AND ts >= toStartOfDay(now())${filter} GROUP BY country ORDER BY c DESC LIMIT 50`, params),
+    queryRows<TsRow>(`SELECT toStartOfHour(ts) AS h, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND ts >= toStartOfDay(now())${filter} GROUP BY h ORDER BY h`, params),
     aiData(filter, params, 7),
     queryRows<OneRow>(`SELECT avg(duration_ms) AS d FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ts >= toStartOfDay(now())${filter}`, params),
     queryRows<OneRow>(`SELECT countIf(pv = 1) AS bounced, count() AS sessions FROM (SELECT visitor_id, countIf(event_type = 'pageview') AS pv FROM events WHERE ts >= toStartOfDay(now())${filter} GROUP BY visitor_id)`, params),
-    queryRows<CountRow>(`SELECT device AS key, count() AS c FROM events WHERE event_type = 'pageview' AND device != '' AND ts >= now() - INTERVAL 1 DAY${filter} GROUP BY device ORDER BY c DESC LIMIT 20`, params),
-    queryRows<CountRow>(`SELECT browser AS key, count() AS c FROM events WHERE event_type = 'pageview' AND browser != '' AND ts >= now() - INTERVAL 1 DAY${filter} GROUP BY browser ORDER BY c DESC LIMIT 20`, params),
-    queryRows<CountRow>(`SELECT os AS key, count() AS c FROM events WHERE event_type = 'pageview' AND os != '' AND ts >= now() - INTERVAL 1 DAY${filter} GROUP BY os ORDER BY c DESC LIMIT 20`, params),
-    queryRows<CountRow>(`SELECT utm_campaign AS key, count() AS c FROM events WHERE event_type = 'pageview' AND utm_campaign != '' AND ts >= now() - INTERVAL 1 DAY${filter} GROUP BY utm_campaign ORDER BY c DESC LIMIT 30`, params),
+    queryRows<CountRow>(`SELECT device AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND device != '' AND ts >= toStartOfDay(now())${filter} GROUP BY device ORDER BY c DESC LIMIT 20`, params),
+    queryRows<CountRow>(`SELECT browser AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND browser != '' AND ts >= toStartOfDay(now())${filter} GROUP BY browser ORDER BY c DESC LIMIT 20`, params),
+    queryRows<CountRow>(`SELECT os AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND os != '' AND ts >= toStartOfDay(now())${filter} GROUP BY os ORDER BY c DESC LIMIT 20`, params),
+    queryRows<CountRow>(`SELECT utm_campaign AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND utm_campaign != '' AND ts >= toStartOfDay(now())${filter} GROUP BY utm_campaign ORDER BY c DESC LIMIT 30`, params),
     // Previous period = yesterday, same hourly window (for the card deltas).
     queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS visitors, countIf(event_type = 'pageview') AS pageviews FROM events WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < now() - INTERVAL 1 DAY${filter}`, params),
     queryRows<OneRow>(`SELECT avg(duration_ms) AS d FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < now() - INTERVAL 1 DAY${filter}`, params),
     queryRows<OneRow>(`SELECT countIf(pv = 1) AS bounced, count() AS sessions FROM (SELECT visitor_id, countIf(event_type = 'pageview') AS pv FROM events WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < now() - INTERVAL 1 DAY${filter} GROUP BY visitor_id)`, params),
   ]);
 
-  const extras = await extraData(site, all, filter, params, 'ts >= now() - INTERVAL 1 DAY', 'ts < now() - INTERVAL 1 DAY');
+  const extras = await extraData(site, all, filter, params, 'ts >= toStartOfDay(now())', 'ts < toStartOfDay(now())');
   const sessions = n(bounce[0]?.sessions);
   const bounceRate = sessions > 0 ? Math.round((n(bounce[0]?.bounced) / sessions) * 100) : 0;
   const prevSessions = n(prevBounce[0]?.sessions);
@@ -354,14 +354,14 @@ async function eventsHistory(filter: string, params: Record<string, unknown> | u
   const [tot, series, channels, referrers, pages, countries, devices, browsers, os, campaigns, avg, bounce, prevTot, prevAvg, prevBounce] = await Promise.all([
     queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS visitors, countIf(event_type = 'pageview') AS pageviews FROM events WHERE ${win}${filter}`, params),
     queryRows<CountRow>(`SELECT toString(toDate(ts)) AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} GROUP BY key ORDER BY key`, params),
-    queryRows<CountRow>(`SELECT source_type AS key, count() AS c FROM events WHERE ${pv} GROUP BY source_type ORDER BY c DESC`, params),
-    queryRows<CountRow>(`SELECT domain(referrer) AS key, count() AS c FROM events WHERE ${pv} AND referrer != '' GROUP BY key ORDER BY c DESC LIMIT 50`, params),
+    queryRows<CountRow>(`SELECT source_type AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} GROUP BY source_type ORDER BY c DESC`, params),
+    queryRows<CountRow>(`SELECT domain(referrer) AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} AND referrer != '' GROUP BY key ORDER BY c DESC LIMIT 50`, params),
     queryRows<CountRow>(`SELECT pathname AS key, count() AS c FROM events WHERE ${pv} GROUP BY pathname ORDER BY c DESC LIMIT 50`, params),
-    queryRows<CountRow>(`SELECT country AS key, count() AS c FROM events WHERE ${pv} AND country != '' GROUP BY country ORDER BY c DESC LIMIT 50`, params),
-    queryRows<CountRow>(`SELECT device AS key, count() AS c FROM events WHERE ${pv} AND device != '' GROUP BY device ORDER BY c DESC LIMIT 20`, params),
-    queryRows<CountRow>(`SELECT browser AS key, count() AS c FROM events WHERE ${pv} AND browser != '' GROUP BY browser ORDER BY c DESC LIMIT 20`, params),
-    queryRows<CountRow>(`SELECT os AS key, count() AS c FROM events WHERE ${pv} AND os != '' GROUP BY os ORDER BY c DESC LIMIT 20`, params),
-    queryRows<CountRow>(`SELECT utm_campaign AS key, count() AS c FROM events WHERE ${pv} AND utm_campaign != '' GROUP BY utm_campaign ORDER BY c DESC LIMIT 30`, params),
+    queryRows<CountRow>(`SELECT country AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} AND country != '' GROUP BY country ORDER BY c DESC LIMIT 50`, params),
+    queryRows<CountRow>(`SELECT device AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} AND device != '' GROUP BY device ORDER BY c DESC LIMIT 20`, params),
+    queryRows<CountRow>(`SELECT browser AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} AND browser != '' GROUP BY browser ORDER BY c DESC LIMIT 20`, params),
+    queryRows<CountRow>(`SELECT os AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} AND os != '' GROUP BY os ORDER BY c DESC LIMIT 20`, params),
+    queryRows<CountRow>(`SELECT utm_campaign AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} AND utm_campaign != '' GROUP BY utm_campaign ORDER BY c DESC LIMIT 30`, params),
     queryRows<OneRow>(`SELECT avg(duration_ms) AS d FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ${win}${filter}`, params),
     queryRows<OneRow>(`SELECT countIf(pv = 1) AS bounced, count() AS sessions FROM (SELECT visitor_id, countIf(event_type = 'pageview') AS pv FROM events WHERE ${win}${filter} GROUP BY visitor_id)`, params),
     queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS visitors, countIf(event_type = 'pageview') AS pageviews FROM events WHERE ${pwin}${filter}`, params),
