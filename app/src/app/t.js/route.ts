@@ -15,7 +15,6 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   var s = document.currentScript;
   var site = (s && s.getAttribute('data-site')) || 'unknown';
   var ENDPOINT = '__ORIGIN__/api/collect';
-  var start = Date.now();
   var sent = false;
   // By default the tracker stores NOTHING on the visitor's device: no cookies,
   // no localStorage. Visitors are counted with a salted hash that rotates daily
@@ -66,6 +65,8 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   // It comes back instantly as soon as you scroll or regain focus.
   var IDLE_MS = 60000;
   var lastActive = Date.now();
+  var engagedMs = 0;
+  var lastTick = Date.now();
   var focused = document.hasFocus();
   // Any interaction implies focus: we refresh the activity AND reassert focus,
   // which avoids a false "non-focus" state on load in some browsers.
@@ -73,7 +74,11 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   var acts = ['mousemove', 'mousedown', 'keydown', 'scroll', 'wheel', 'touchstart', 'pointerdown'];
   for (var i = 0; i < acts.length; i++) window.addEventListener(acts[i], bump, { passive: true, capture: true });
   function engaged() { return document.visibilityState === 'visible' && focused && (Date.now() - lastActive) < IDLE_MS; }
-  function ping() { if (engaged()) send('ping'); }
+  // Accumulate ENGAGED time only, so "avg time" is real foreground attention, not the
+  // wall-clock lifetime of a tab left open. Each heartbeat credits the elapsed interval
+  // when engaged; a gap over 30s (tab was hidden and the timer paused) is not trusted.
+  function accrue() { var now = Date.now(); var d = now - lastTick; lastTick = now; if (d > 0 && d <= 30000 && engaged()) engagedMs += d; }
+  function ping() { accrue(); if (engaged()) send('ping'); }
   var hb = setInterval(ping, 15000);
   document.addEventListener('click', function (e) {
     bump();
@@ -82,7 +87,7 @@ const SCRIPT = `/* Insight — cookieless analytics. */
     var href = a.getAttribute('href') || '';
     if (/^https?:\\/\\//.test(href) && a.host !== location.host) send('click', { click_target: href });
   }, true);
-  function bye() { if (sent) return; sent = true; send('custom', { duration_ms: Date.now() - start }); }
+  function bye() { if (sent) return; sent = true; accrue(); send('custom', { duration_ms: engagedMs }); }
   // Reliable end of session: visibilitychange (hidden) + pagehide (~91% combined coverage).
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') bye(); else { sent = false; bump(); ping(); } });
   // Focus/blur: a window that loses the foreground (without being hidden) stops being "live".
