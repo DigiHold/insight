@@ -127,8 +127,7 @@ function cardHTML(v: Visitor): string {
 export function GlobeModal({ site, onClose }: { site: string; onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const markersKeyRef = useRef('');
+  const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; popup: mapboxgl.Popup; el: HTMLElement; sig: string }>>(new Map());
   const [token, setToken] = useState<string | null | undefined>(undefined);
   const [ready, setReady] = useState(false);
   const [data, setData] = useState<LiveData>({ countries: [], visitors: [] });
@@ -219,17 +218,24 @@ export function GlobeModal({ site, onClose }: { site: string; onClose: () => voi
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    // Only recreate the markers if the set of visitors changes, so we don't close an
-    // open popover on every refresh (every 5s).
-    const key = data.visitors.map((v) => v.id).sort().join(',');
-    if (key === markersKeyRef.current) return;
-    markersKeyRef.current = key;
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
-    const els: HTMLElement[] = [];
+    const markers = markersRef.current;
+    const seen = new Set<string>();
+    // A visitor's card changes when their page, visited pages or active state change.
+    // sessionSec is excluded: for active visitors the counter ticks client-side, so it
+    // must not force a re-render every poll.
+    const sigOf = (v: Visitor): string => `${v.path}|${(v.pages || []).join(',')}|${v.active ? 1 : 0}`;
     data.visitors.forEach((v) => {
       const c = CENTROIDS[v.country];
       if (!c) return;
+      seen.add(v.id);
+      const existing = markers.get(v.id);
+      if (existing) {
+        // Same visitor still here: refresh the popup content in place ONLY when it changed,
+        // which updates the current page without closing an open popover.
+        const sig = sigOf(v);
+        if (sig !== existing.sig) { existing.popup.setHTML(cardHTML(v)); existing.sig = sig; }
+        return;
+      }
       const el = document.createElement('div');
       el.style.cssText = 'position:relative;cursor:pointer';
       el.innerHTML = `<img src="${avatar(v.id)}" style="display:block;width:100%;height:100%;border-radius:50%;background:#fff;border:2px solid #fff;box-shadow:0 2px 12px rgba(0,0,0,.55)"/><span style="position:absolute;top:0;right:0;border-radius:50%;background:#3b82f6;border:2px solid #05070f;box-shadow:0 0 8px rgba(59,130,246,.9)"></span>`;
@@ -242,10 +248,11 @@ export function GlobeModal({ site, onClose }: { site: string; onClose: () => voi
       popup.on('open', () => { el.style.visibility = 'hidden'; });
       popup.on('close', () => { el.style.visibility = 'visible'; });
       el.addEventListener('click', (e) => { e.stopPropagation(); marker.togglePopup(); });
-      markersRef.current.push(marker);
-      els.push(el);
+      markers.set(v.id, { marker, popup, el, sig: sigOf(v) });
     });
-    const resize = () => { const z = map.getZoom(); els.forEach((el) => setMarkerSize(el, sizeForZoom(z))); };
+    // Drop markers for visitors who are no longer live.
+    for (const [id, m] of markers) { if (!seen.has(id)) { m.marker.remove(); markers.delete(id); } }
+    const resize = () => { const z = map.getZoom(); markers.forEach((m) => setMarkerSize(m.el, sizeForZoom(z))); };
     map.on('zoom', resize);
     return () => { map.off('zoom', resize); };
   }, [data.visitors, ready]);
