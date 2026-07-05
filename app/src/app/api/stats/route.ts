@@ -261,27 +261,16 @@ async function liveStats(site: string, all: boolean) {
   const acc = s?.ga4 ? await getGa4Account() : null;
   if (s?.ga4 && acc) {
     const g = await ga4TodayStats(acc.json, s.ga4.propertyId);
-    if (g) {
+    // Only use GA4 for "Today" when it has actually published intraday breakdowns.
+    // Otherwise the header would show GA4 totals while every card falls back to the
+    // native tracker, two different measurement systems that never reconcile. In that
+    // case fall through to the fully-native path below: the tracker is real-time and
+    // complete, so header and cards come from one source and add up.
+    const ga4HasDetail = g && (g.sources.length > 0 || g.pages.length > 0 || g.series.length > 0);
+    if (g && ga4HasDetail) {
       const out = fromGa4(g, { revenue, online: n(online[0]?.n), campaigns: campaignsOut, ai: aiOut, aiSeries, aiBots });
-      const pick = <T>(a: T[], b: T[]): T[] => (a.length > 0 ? a : b);
-      const merged = {
-        ...out,
-        channels: pick(out.channels, native.channels),
-        referrers: pick(out.referrers, native.referrers),
-        pages: pick(out.pages, native.pages),
-        countries: pick(out.countries, native.countries),
-        devices: pick(out.devices, native.devices),
-        browsers: pick(out.browsers, native.browsers),
-        os: pick(out.os, native.os),
-        series: out.series.length > 0 ? out.series : nativeSeries,
-      };
-      // ga4Extras overrides landing/cities/regions/languages/new-vs-returning with
-      // GA4 values. Only apply it when GA4 actually returned intraday detail; when it
-      // did not, keep the tracker's extras so those cards (and the new/returning split
-      // that must reconcile with the total) stay populated instead of going blank.
-      const ga4HasDetail = out.channels.length > 0 || out.pages.length > 0 || out.series.length > 0;
-      const base = ga4HasDetail ? { ...merged, ...extras, ...ga4Extras(g) } : { ...merged, ...extras };
-      return { ...base, series: attachRev(merged.series, revMap) };
+      const merged = { ...out, series: out.series.length > 0 ? out.series : nativeSeries };
+      return { ...merged, ...extras, ...ga4Extras(g), series: attachRev(merged.series, revMap) };
     }
   }
 
