@@ -35,7 +35,11 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             cd /opt/insight
             git pull --ff-only
-            export MAPBOX_TOKEN="$MAPBOX_TOKEN"
+            # Persist the Mapbox token in .env so a manual "docker compose up" (e.g. to
+            # change INSIGHT_TZ) keeps the live map instead of dropping the token.
+            touch .env
+            grep -v '^MAPBOX_TOKEN=' .env > .env.tmp && mv .env.tmp .env
+            echo "MAPBOX_TOKEN=$MAPBOX_TOKEN" >> .env
             docker compose -p insight pull
             docker compose -p insight up -d
             docker logout ghcr.io
