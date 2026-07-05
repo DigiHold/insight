@@ -213,7 +213,7 @@ async function liveStats(site: string, all: boolean) {
     queryRows<CountRow>(`SELECT country AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND country != '' AND ts >= toStartOfDay(now())${filter} GROUP BY country ORDER BY c DESC LIMIT 50`, params),
     queryRows<TsRow>(`SELECT toStartOfHour(ts) AS h, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND ts >= toStartOfDay(now())${filter} GROUP BY h ORDER BY h`, params),
     aiData(filter, params, 7),
-    queryRows<OneRow>(`SELECT avg(least(duration_ms, 1800000)) AS d FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ts >= toStartOfDay(now())${filter}`, params),
+    queryRows<OneRow>(`SELECT avg(m) AS d FROM (SELECT max(least(duration_ms, 1800000)) AS m FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ts >= toStartOfDay(now())${filter} GROUP BY visitor_id)`, params),
     queryRows<OneRow>(`SELECT countIf(pv = 1) AS bounced, count() AS sessions FROM (SELECT visitor_id, countIf(event_type = 'pageview') AS pv FROM events WHERE ts >= toStartOfDay(now())${filter} GROUP BY visitor_id)`, params),
     queryRows<CountRow>(`SELECT device AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND device != '' AND ts >= toStartOfDay(now())${filter} GROUP BY device ORDER BY c DESC LIMIT 20`, params),
     queryRows<CountRow>(`SELECT browser AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND browser != '' AND ts >= toStartOfDay(now())${filter} GROUP BY browser ORDER BY c DESC LIMIT 20`, params),
@@ -221,7 +221,7 @@ async function liveStats(site: string, all: boolean) {
     queryRows<CountRow>(`SELECT utm_campaign AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND utm_campaign != '' AND ts >= toStartOfDay(now())${filter} GROUP BY utm_campaign ORDER BY c DESC LIMIT 30`, params),
     // Previous period = yesterday, same hourly window (for the card deltas).
     queryRows<OneRow>(`SELECT uniqExactIf(visitor_id, event_type = 'pageview') AS visitors, countIf(event_type = 'pageview') AS pageviews FROM events WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < now() - INTERVAL 1 DAY${filter}`, params),
-    queryRows<OneRow>(`SELECT avg(least(duration_ms, 1800000)) AS d FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < now() - INTERVAL 1 DAY${filter}`, params),
+    queryRows<OneRow>(`SELECT avg(m) AS d FROM (SELECT max(least(duration_ms, 1800000)) AS m FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < now() - INTERVAL 1 DAY${filter} GROUP BY visitor_id)`, params),
     queryRows<OneRow>(`SELECT countIf(pv = 1) AS bounced, count() AS sessions FROM (SELECT visitor_id, countIf(event_type = 'pageview') AS pv FROM events WHERE ts >= toStartOfDay(now()) - INTERVAL 1 DAY AND ts < now() - INTERVAL 1 DAY${filter} GROUP BY visitor_id)`, params),
   ]);
 
@@ -423,10 +423,10 @@ async function eventsHistory(filter: string, params: Record<string, unknown> | u
     queryRows<CountRow>(`SELECT browser AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} AND browser != '' GROUP BY browser ORDER BY c DESC LIMIT 20`, params),
     queryRows<CountRow>(`SELECT os AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} AND os != '' GROUP BY os ORDER BY c DESC LIMIT 20`, params),
     queryRows<CountRow>(`SELECT utm_campaign AS key, uniqExact(visitor_id) AS c FROM events WHERE ${pv} AND utm_campaign != '' GROUP BY utm_campaign ORDER BY c DESC LIMIT 30`, params),
-    queryRows<OneRow>(`SELECT avg(least(duration_ms, 1800000)) AS d FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ${win}${filter}`, params),
+    queryRows<OneRow>(`SELECT avg(m) AS d FROM (SELECT max(least(duration_ms, 1800000)) AS m FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ${win}${filter} GROUP BY visitor_id)`, params),
     queryRows<OneRow>(`SELECT countIf(pv = 1) AS bounced, count() AS sessions FROM (SELECT visitor_id, countIf(event_type = 'pageview') AS pv FROM events WHERE ${win}${filter} GROUP BY visitor_id)`, params),
     queryRows<OneRow>(`SELECT uniqExactIf(visitor_id, event_type = 'pageview') AS visitors, countIf(event_type = 'pageview') AS pageviews FROM events WHERE ${pwin}${filter}`, params),
-    queryRows<OneRow>(`SELECT avg(least(duration_ms, 1800000)) AS d FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ${pwin}${filter}`, params),
+    queryRows<OneRow>(`SELECT avg(m) AS d FROM (SELECT max(least(duration_ms, 1800000)) AS m FROM events WHERE event_type = 'custom' AND duration_ms > 0 AND ${pwin}${filter} GROUP BY visitor_id)`, params),
     queryRows<OneRow>(`SELECT countIf(pv = 1) AS bounced, count() AS sessions FROM (SELECT visitor_id, countIf(event_type = 'pageview') AS pv FROM events WHERE ${pwin}${filter} GROUP BY visitor_id)`, params),
   ]);
   const sessions = n(bounce[0]?.sessions);

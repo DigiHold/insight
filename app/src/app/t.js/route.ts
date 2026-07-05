@@ -15,7 +15,6 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   var s = document.currentScript;
   var site = (s && s.getAttribute('data-site')) || 'unknown';
   var ENDPOINT = '__ORIGIN__/api/collect';
-  var sent = false;
   // By default the tracker stores NOTHING on the visitor's device: no cookies,
   // no localStorage. Visitors are counted with a salted hash that rotates daily
   // (server-side), which keeps the "no consent banner" claim true in the EU,
@@ -64,7 +63,6 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   function route() {
     if (location.pathname === lastPath) return;
     lastPath = location.pathname;
-    sent = false;
     send('pageview');
   }
   var _push = history.pushState;
@@ -80,8 +78,9 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   // It comes back instantly as soon as you scroll or regain focus.
   var IDLE_MS = 60000;
   var lastActive = Date.now();
-  var engagedMs = 0;
-  var lastTick = Date.now();
+  var visMs = 0;
+  var visSince = document.visibilityState === 'visible' ? Date.now() : 0;
+  var lastSent = -1;
   var focused = document.hasFocus();
   // Any interaction implies focus: we refresh the activity AND reassert focus,
   // which avoids a false "non-focus" state on load in some browsers.
@@ -89,11 +88,12 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   var acts = ['mousemove', 'mousedown', 'keydown', 'scroll', 'wheel', 'touchstart', 'pointerdown'];
   for (var i = 0; i < acts.length; i++) window.addEventListener(acts[i], bump, { passive: true, capture: true });
   function engaged() { return document.visibilityState === 'visible' && focused && (Date.now() - lastActive) < IDLE_MS; }
-  // Accumulate ENGAGED time only, so "avg time" is real foreground attention, not the
-  // wall-clock lifetime of a tab left open. Each heartbeat credits the elapsed interval
-  // when engaged; a gap over 30s (tab was hidden and the timer paused) is not trusted.
-  function accrue() { var now = Date.now(); var d = now - lastTick; lastTick = now; if (d > 0 && d <= 30000 && engaged()) engagedMs += d; }
-  function ping() { accrue(); if (engaged()) send('ping'); }
+  // "Avg time" is how long the page was actually VISIBLE (the foreground tab),
+  // accumulated across tab switches and capped at 30 min. This avoids the wall-clock
+  // inflation of a tab left open, and unlike a 15s-tick engagement counter it does not
+  // collapse short visits to zero.
+  function flush() { if (visSince) { visMs += Date.now() - visSince; visSince = 0; } }
+  function ping() { if (engaged()) send('ping'); }
   var hb = setInterval(ping, 15000);
   document.addEventListener('click', function (e) {
     bump();
@@ -102,11 +102,13 @@ const SCRIPT = `/* Insight — cookieless analytics. */
     var href = a.getAttribute('href') || '';
     if (/^https?:\\/\\//.test(href) && a.host !== location.host) send('click', { click_target: href });
   }, true);
-  function bye() { if (sent) return; sent = true; accrue(); send('custom', { duration_ms: engagedMs }); }
+  // Send the visible-time total. Re-sends only when it has grown (tab reopened); the
+  // dashboard averages the max per visitor, so multiple sends never bias the average.
+  function bye() { flush(); var d = Math.min(visMs, 1800000); if (d <= lastSent) return; lastSent = d; send('custom', { duration_ms: d }); }
   // Reliable end of session: visibilitychange (hidden) + pagehide (~91% combined coverage).
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') bye(); else { sent = false; bump(); ping(); } });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') bye(); else { visSince = Date.now(); bump(); ping(); } });
   // Focus/blur: a window that loses the foreground (without being hidden) stops being "live".
-  window.addEventListener('focus', function () { sent = false; bump(); ping(); });
+  window.addEventListener('focus', function () { bump(); ping(); });
   window.addEventListener('blur', function () { focused = false; });
   window.addEventListener('pagehide', function () { clearInterval(hb); bye(); });
   // Public API: window.insight('purchase', { amount: 99, currency: 'usd' })
