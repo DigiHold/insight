@@ -74,28 +74,33 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   // while the tab is (1) visible and (2) in the foreground (focused). No interaction is
   // required, so someone reading an article without scrolling still counts. Switching
   // tab, minimizing, or locking the screen drops the visibility/focus and they go offline.
-  var visMs = 0;
-  var visSince = document.visibilityState === 'visible' ? Date.now() : 0;
-  var lastSent = -1;
-  var IDLE_MS = 60000;
-  var lastActive = Date.now();
+  var engagedMs = 0;   // foreground time accrued so far
+  var sentMs = 0;      // foreground time already reported to the server
   // Assume focus when the page loads visible; mobile browsers rarely fire focus events,
   // so we lean on visibility there and only clear focus on an explicit blur.
   var focused = !document.hidden;
-  // Any interaction reasserts focus and marks the visitor active, resuming the timer.
-  function bump() { focused = true; lastActive = Date.now(); resume(); }
+  // Foreground = visible AND focused, exactly like GA4 engagement time. No interaction is
+  // required, so reading a page without scrolling counts; hiding, blurring or closing pauses it.
+  function foreground() { return document.visibilityState === 'visible' && focused; }
+  var fgSince = foreground() ? Date.now() : 0;
+  // Add the current foreground stretch to the total, then restart the clock if still foreground.
+  function tick() { if (fgSince) engagedMs += Date.now() - fgSince; fgSince = foreground() ? Date.now() : 0; }
+  function bump() { focused = true; if (!fgSince && foreground()) fgSince = Date.now(); }
   var acts = ['mousemove', 'mousedown', 'keydown', 'scroll', 'wheel', 'touchstart', 'pointerdown'];
   for (var i = 0; i < acts.length; i++) window.addEventListener(acts[i], bump, { passive: true, capture: true });
-  // LIVE presence: visible + foreground (no interaction required, so a reader stays online).
-  function engaged() { return document.visibilityState === 'visible' && focused; }
-  // Recorded "avg time" = time the page was visible, focused AND not idle. We accumulate
-  // while present and active, and pause after IDLE_MS with no interaction (or on hide/blur),
-  // so a forgotten foreground tab cannot log 30 minutes. Partials are credited at every
-  // transition, so short visits are never lost. Capped at 30 min.
-  function flush() { if (visSince) { visMs += Date.now() - visSince; visSince = 0; } }
-  function resume() { if (!visSince && document.visibilityState === 'visible' && focused && (Date.now() - lastActive) < IDLE_MS) visSince = Date.now(); }
-  function ping() { if ((Date.now() - lastActive) >= IDLE_MS) flush(); else resume(); if (engaged()) send('ping'); }
-  var hb = setInterval(ping, 15000);
+  // LIVE presence: visible + foreground, so a reader stays online without interacting.
+  function engaged() { return foreground(); }
+  // Report engagement the GA4 way: INCREMENTALLY. Each heartbeat (and the final one on exit)
+  // sends only the foreground time gained since the last report, so every value is small
+  // (bounded by the interval) and a single row can never be a bogus 30 minutes. The delta
+  // rides on the ping, so there is no extra request; the dashboard sums them per visitor.
+  function report(final) {
+    tick();
+    var d = engagedMs - sentMs;
+    if (d > 0) { sentMs = engagedMs; send(final ? 'custom' : 'ping', { duration_ms: d }); }
+    else if (!final && engaged()) send('ping');
+  }
+  var hb = setInterval(report, 15000);
   document.addEventListener('click', function (e) {
     bump();
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
@@ -103,14 +108,12 @@ const SCRIPT = `/* Insight — cookieless analytics. */
     var href = a.getAttribute('href') || '';
     if (/^https?:\\/\\//.test(href) && a.host !== location.host) send('click', { click_target: href });
   }, true);
-  // Send the visible-time total. Re-sends only when it has grown (tab reopened); the
-  // dashboard averages the max per visitor, so multiple sends never bias the average.
-  function bye() { flush(); var d = Math.min(visMs, 1800000); if (d <= lastSent) return; lastSent = d; send('custom', { duration_ms: d }); }
+  function bye() { report(true); }
   // Reliable end of session: visibilitychange (hidden) + pagehide (~91% combined coverage).
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') bye(); else { bump(); ping(); } });
-  // Focus/blur: a window that loses the foreground (without being hidden) stops counting.
-  window.addEventListener('focus', function () { bump(); ping(); });
-  window.addEventListener('blur', function () { focused = false; flush(); });
+  document.addEventListener('visibilitychange', function () { tick(); if (document.visibilityState === 'hidden') bye(); else { bump(); report(); } });
+  // Focus/blur: losing the foreground pauses the engagement clock.
+  window.addEventListener('focus', function () { bump(); report(); });
+  window.addEventListener('blur', function () { focused = false; tick(); });
   window.addEventListener('pagehide', function () { clearInterval(hb); bye(); });
   // Public API: window.insight('purchase', { amount: 99, currency: 'usd' })
   // on a thank-you page attributes revenue to this visitor's source.
