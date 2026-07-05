@@ -84,7 +84,10 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   function foreground() { return document.visibilityState === 'visible' && focused; }
   var fgSince = foreground() ? Date.now() : 0;
   // Add the current foreground stretch to the total, then restart the clock if still foreground.
-  function tick() { if (fgSince) engagedMs += Date.now() - fgSince; fgSince = foreground() ? Date.now() : 0; }
+  // A stretch longer than 30s means the heartbeat (every 15s) did NOT keep firing, so the tab
+  // was really backgrounded or the machine slept without a visibility/blur event. We drop that
+  // gap instead of crediting it, which is what caused a full "30 min" to appear on return.
+  function tick() { if (fgSince) { var d = Date.now() - fgSince; if (d > 0 && d <= 30000) engagedMs += d; } fgSince = foreground() ? Date.now() : 0; }
   function bump() { focused = true; if (!fgSince && foreground()) fgSince = Date.now(); }
   var acts = ['mousemove', 'mousedown', 'keydown', 'scroll', 'wheel', 'touchstart', 'pointerdown'];
   for (var i = 0; i < acts.length; i++) window.addEventListener(acts[i], bump, { passive: true, capture: true });
