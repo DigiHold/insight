@@ -31,7 +31,7 @@ Fill in `.env`:
 - `AUTH_SECRET` a long random string (`openssl rand -hex 32`). This also salts visitor hashing, so keep it stable.
 - `ADMIN_EMAIL` and `ADMIN_PASSWORD` your dashboard login.
 - `MAPBOX_TOKEN` a Mapbox public token, restricted to your domain (see section 6).
-- `INSIGHT_TZ` (optional) your timezone as an IANA name, for example `Europe/Zurich`. It decides when "today" starts and drives the heatmap, retention weeks and the revenue overlay. Defaults to `UTC`.
+- `INSIGHT_TZ` (optional) your timezone as an IANA name, for example `America/New_York`. It decides when "today" starts and drives the heatmap, retention weeks and the revenue overlay. Defaults to `UTC`. See "Set your timezone" below.
 
 Then start it:
 
@@ -41,6 +41,30 @@ curl -s http://127.0.0.1:8787/api/health   # should return {"status":"ok","click
 ```
 
 The app listens only on `127.0.0.1:8787`. ClickHouse has no published port and stays internal. The database and its schema are created automatically on first start.
+
+### Set your timezone
+
+By default every date is computed in UTC, so "today" starts at UTC midnight. Set `INSIGHT_TZ` to your own IANA timezone name so the dashboard follows your local day.
+
+United States:
+
+- `America/New_York` (Eastern)
+- `America/Chicago` (Central)
+- `America/Denver` (Mountain)
+- `America/Los_Angeles` (Pacific)
+
+Other examples: `Europe/London`, `Europe/Paris`, `Europe/Zurich`, `Asia/Tokyo`, `Australia/Sydney`. The full list is on Wikipedia under "List of tz database time zones", or run `timedatectl list-timezones` on the server.
+
+To change it, edit `.env` and restart the app:
+
+```bash
+# add or edit this line in .env
+INSIGHT_TZ=America/New_York
+
+docker compose up -d app
+```
+
+The change takes effect immediately for new views. Existing data is not rewritten; it is simply grouped under the new day boundaries from now on.
 
 ## 3. Put it behind HTTPS
 
