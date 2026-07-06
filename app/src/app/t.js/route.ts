@@ -70,38 +70,43 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   var _replace = history.replaceState;
   history.replaceState = function () { _replace.apply(this, arguments); route(); };
   window.addEventListener('popstate', route);
-  // Heartbeat based on ENGAGEMENT, like GA4 ("foreground time"). A visitor is "live"
-  // while the tab is (1) visible and (2) in the foreground (focused). No interaction is
-  // required, so someone reading an article without scrolling still counts. Switching
-  // tab, minimizing, or locking the screen drops the visibility/focus and they go offline.
-  var engagedMs = 0;   // foreground time accrued so far
-  var sentMs = 0;      // foreground time already reported to the server
+  // Heartbeat based on ENGAGEMENT, like GA4 ("foreground time"), but a tab left open and
+  // untouched must not count for hours. A visitor is engaged while the tab is visible and
+  // focused AND shows a sign of presence: interaction within IDLE_MS, or media playing.
+  // Switching tab, minimizing, locking the screen, or going idle drops them.
+  var engagedMs = 0;   // engaged time accrued so far
+  var sentMs = 0;      // engaged time already reported to the server
+  var IDLE_MS = 90000; // stop counting a foreground tab after this long with no sign of presence
+  var lastActive = Date.now();
   // Assume focus when the page loads visible; mobile browsers rarely fire focus events,
   // so we lean on visibility there and only clear focus on an explicit blur.
   var focused = !document.hidden;
-  // Foreground = visible AND focused, exactly like GA4 engagement time. No interaction is
-  // required, so reading a page without scrolling counts; hiding, blurring or closing pauses it.
-  function foreground() { return document.visibilityState === 'visible' && focused; }
-  var fgSince = foreground() ? Date.now() : 0;
-  // Add the current foreground stretch to the total, then restart the clock if still foreground.
+  // Media (a playing <video>/<audio>) counts as presence even without interaction, so an
+  // 80-minute video is measured in full. Best-effort: cross-origin embeds are not visible here.
+  function mediaPlaying() { var m = document.querySelectorAll('video,audio'); for (var i = 0; i < m.length; i++) { if (!m[i].paused && !m[i].ended && m[i].currentTime > 0) return true; } return false; }
+  // "Present" = the visitor is actually here: foreground (visible + focused) AND either
+  // interacting within IDLE_MS or watching/listening to media. This is what stops a forgotten
+  // foreground tab from counting for hours, while a real reader (who scrolls) or a video keeps going.
+  function present() { return document.visibilityState === 'visible' && focused && ((Date.now() - lastActive) < IDLE_MS || mediaPlaying()); }
+  var fgSince = present() ? Date.now() : 0;
+  // Add the current engaged stretch to the total, then restart the clock if still present.
   // A stretch longer than 30s means the heartbeat (every 15s) did NOT keep firing, so the tab
-  // was really backgrounded or the machine slept without a visibility/blur event. We drop that
-  // gap instead of crediting it, which is what caused a full "30 min" to appear on return.
-  function tick() { if (fgSince) { var d = Date.now() - fgSince; if (d > 0 && d <= 30000) engagedMs += d; } fgSince = foreground() ? Date.now() : 0; }
-  function bump() { focused = true; if (!fgSince && foreground()) fgSince = Date.now(); }
+  // was really backgrounded or the machine slept without an event. We drop that gap instead of
+  // crediting it, which is what caused a full "30 min" to appear on return.
+  function tick() { if (fgSince) { var d = Date.now() - fgSince; if (d > 0 && d <= 30000) engagedMs += d; } fgSince = present() ? Date.now() : 0; }
+  function bump() { focused = true; lastActive = Date.now(); if (!fgSince && document.visibilityState === 'visible') fgSince = Date.now(); }
   var acts = ['mousemove', 'mousedown', 'keydown', 'scroll', 'wheel', 'touchstart', 'pointerdown'];
   for (var i = 0; i < acts.length; i++) window.addEventListener(acts[i], bump, { passive: true, capture: true });
-  // LIVE presence: visible + foreground, so a reader stays online without interacting.
-  function engaged() { return foreground(); }
+  // LIVE presence uses the same rule, so an idle forgotten tab also drops off the live map.
+  function engaged() { return present(); }
   // Report engagement the GA4 way: INCREMENTALLY. Each heartbeat (and the final one on exit)
-  // sends only the foreground time gained since the last report, so every value is small
-  // (bounded by the interval) and a single row can never be a bogus 30 minutes. The delta
-  // rides on the ping, so there is no extra request; the dashboard sums them per visitor.
+  // sends only the engaged time gained since the last report, so every value is small (bounded
+  // by the interval). The delta rides on the ping; the dashboard sums them per visitor.
   function report(final) {
     tick();
     var d = engagedMs - sentMs;
     if (d > 0) { sentMs = engagedMs; send(final ? 'custom' : 'ping', { duration_ms: d }); }
-    else if (!final && engaged()) send('ping');
+    else if (!final && present()) send('ping');
   }
   var hb = setInterval(report, 15000);
   document.addEventListener('click', function (e) {
