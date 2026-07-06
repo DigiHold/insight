@@ -81,9 +81,10 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   // Assume focus when the page loads visible; mobile browsers rarely fire focus events,
   // so we lean on visibility there and only clear focus on an explicit blur.
   var focused = !document.hidden;
-  // Media (a playing <video>/<audio>) counts as presence even without interaction, so an
-  // 80-minute video is measured in full. Best-effort: cross-origin embeds are not visible here.
-  function mediaPlaying() { var m = document.querySelectorAll('video,audio'); for (var i = 0; i < m.length; i++) { if (!m[i].paused && !m[i].ended && m[i].currentTime > 0) return true; } return false; }
+  // Unmuted playing media counts as presence even without interaction, so an 80-minute video
+  // watched with sound is measured in full. Muted autoplay (decorative background loops) does
+  // NOT count, so it can't keep an idle tab alive. Cross-origin embeds are not visible here.
+  function mediaPlaying() { var m = document.querySelectorAll('video,audio'); for (var i = 0; i < m.length; i++) { if (!m[i].paused && !m[i].ended && !m[i].muted && m[i].volume > 0 && m[i].currentTime > 0) return true; } return false; }
   // "Present" = the visitor is actually here: foreground (visible + focused) AND either
   // interacting within IDLE_MS or watching/listening to media. This is what stops a forgotten
   // foreground tab from counting for hours, while a real reader (who scrolls) or a video keeps going.
