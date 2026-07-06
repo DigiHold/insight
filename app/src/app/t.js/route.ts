@@ -23,22 +23,25 @@ const SCRIPT = `/* Insight — cookieless analytics. */
   // in localStorage for precise returning-visitor and retention tracking. Sites
   // that enable it should cover it in their privacy policy (and, for EU
   // audiences, their consent flow).
-  var iid = '';
-  if (s && s.getAttribute('data-persist') === 'true') {
+  var persist = !!(s && s.getAttribute('data-persist') === 'true');
+  function storedId() { try { return localStorage.getItem('_ins_id') || ''; } catch (e) { return ''; } }
+  // The id is always read fresh from localStorage, which is shared across tabs. If storage is
+  // blocked (private mode) the id is empty and the server counts by a daily IP+UA hash, so
+  // multiple tabs still resolve to one visitor.
+  function curId() { return persist ? storedId() : ''; }
+  var freshId = false; // true if we minted the id this load (sibling tabs may be racing to mint theirs)
+  if (persist && !storedId()) {
     try {
-      iid = localStorage.getItem('_ins_id') || '';
-      if (!iid) {
-        iid = ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, function (c) {
-          return (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16);
-        });
-        localStorage.setItem('_ins_id', iid);
-      }
+      localStorage.setItem('_ins_id', ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, function (c) {
+        return (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16);
+      }));
+      freshId = true;
     } catch (e) {}
   }
   function payload(type, extra) {
     var u = new URL(location.href);
     var body = {
-      site: site, type: type, iid: iid, url: location.href, path: location.pathname, query: location.search,
+      site: site, type: type, iid: curId(), url: location.href, path: location.pathname, query: location.search,
       referrer: document.referrer || '', lang: navigator.language || '',
       sw: window.screen ? window.screen.width : 0,
       utm_source: u.searchParams.get('utm_source') || '', utm_medium: u.searchParams.get('utm_medium') || '',
@@ -55,7 +58,11 @@ const SCRIPT = `/* Insight — cookieless analytics. */
       else fetch(ENDPOINT, { method: 'POST', body: data, keepalive: true, headers: { 'Content-Type': 'text/plain' } });
     } catch (e) {}
   }
-  send('pageview');
+  // If we just minted the id, tabs opened at the same instant are each minting their own. Wait
+  // briefly so they all converge on the single value that stuck in localStorage, then send the
+  // first pageview reading that value, so 3 tabs opened together count as ONE visitor, not three.
+  if (persist && freshId) setTimeout(function () { send('pageview'); }, 300);
+  else send('pageview');
   // Single-page apps (React, Next, Vue...) change the URL without reloading, so a
   // plain load-time pageview would miss every client-side navigation. We wrap the
   // History API and listen to popstate to record a pageview on each real path change.
