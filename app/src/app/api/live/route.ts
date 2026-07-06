@@ -39,7 +39,7 @@ export async function GET(req: Request) {
     const [onlineRows, countries, visitors] = await Promise.all([
       // Same count as the dashboard "Online" chip, so the globe total matches it
       // even for present visitors whose location is unknown (no marker).
-      queryRows<{ n: string }>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 45 SECOND${filter}`, params),
+      queryRows<{ n: string }>(`SELECT count() AS n FROM (SELECT visitor_id FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 2 HOUR${filter} GROUP BY visitor_id HAVING max(ts) >= now() - INTERVAL 45 SECOND AND countIf(event_type = 'pageview') > 0)`, params),
       queryRows<CountryRow>(`SELECT country, count() AS c FROM (SELECT visitor_id, any(country) AS country FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 2 HOUR${filter} GROUP BY visitor_id HAVING max(ts) >= now() - INTERVAL 45 SECOND AND countIf(event_type = 'pageview') > 0) WHERE country != '' GROUP BY country ORDER BY c DESC`, params),
       queryRows<VisitorRow>(
         // Truly live via an engagement-based heartbeat: the script pings every 15s as long

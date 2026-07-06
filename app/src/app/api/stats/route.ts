@@ -205,7 +205,7 @@ async function liveStats(site: string, all: boolean) {
   const params = all ? undefined : { site };
 
   const [online, today, channels, referrers, pages, countries, series, aiRes, avg, bounce, devices, browsers, os, campaigns, prevToday, prevAvg, prevBounce] = await Promise.all([
-    queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 45 SECOND${filter}`, params),
+    queryRows<OneRow>(`SELECT count() AS n FROM (SELECT visitor_id FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 2 HOUR${filter} GROUP BY visitor_id HAVING max(ts) >= now() - INTERVAL 45 SECOND AND countIf(event_type = 'pageview') > 0)`, params),
     queryRows<OneRow>(`SELECT uniqExactIf(visitor_id, event_type = 'pageview') AS visitors, countIf(event_type = 'pageview') AS pageviews FROM events WHERE ts >= toStartOfDay(now())${filter}`, params),
     queryRows<CountRow>(`SELECT source_type AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND ts >= toStartOfDay(now())${filter} GROUP BY source_type ORDER BY c DESC`, params),
     queryRows<CountRow>(`SELECT domain(referrer) AS key, uniqExact(visitor_id) AS c FROM events WHERE event_type = 'pageview' AND referrer != '' AND ts >= toStartOfDay(now())${filter} GROUP BY key ORDER BY c DESC LIMIT 50`, params),
@@ -371,7 +371,7 @@ async function historyStats(site: string, all: boolean, period: string, from?: s
     : `ts >= now() - INTERVAL ${2 * days} DAY AND ts < now() - INTERVAL ${days} DAY`;
 
   const [onlineRows, aiRes] = await Promise.all([
-    queryRows<OneRow>(`SELECT uniqExact(visitor_id) AS n FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 45 SECOND${filter}`, all ? undefined : { site }),
+    queryRows<OneRow>(`SELECT count() AS n FROM (SELECT visitor_id FROM events WHERE event_type IN ('pageview', 'ping') AND ts >= now() - INTERVAL 2 HOUR${filter} GROUP BY visitor_id HAVING max(ts) >= now() - INTERVAL 45 SECOND AND countIf(event_type = 'pageview') > 0)`, all ? undefined : { site }),
     aiData(filter, params, days, custom ? win : undefined),
   ]);
   const { ai, aiSeries, aiBots } = aiRes;
