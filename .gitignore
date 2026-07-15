@@ -12,3 +12,4 @@ app/node_modules/
 
 # Local, private instructions — never publish
 CLAUDE.md
+.claude/
