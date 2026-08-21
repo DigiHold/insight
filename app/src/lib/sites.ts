@@ -17,6 +17,7 @@ export interface Site {
   faviconType?: string;
   stripeKey?: string;
   ga4?: Ga4Config;
+  shareToken?: string;
 }
 
 export interface PublicSite {
@@ -27,10 +28,11 @@ export interface PublicSite {
   favicon: boolean;
   stripe: boolean;
   ga4: boolean;
+  shareToken?: string;
 }
 
 export function toPublic(s: Site): PublicSite {
-  return { id: s.id, name: s.name, createdAt: s.createdAt, url: s.url ?? '', favicon: !!s.faviconType, stripe: !!s.stripeKey, ga4: !!s.ga4 };
+  return { id: s.id, name: s.name, createdAt: s.createdAt, url: s.url ?? '', favicon: !!s.faviconType, stripe: !!s.stripeKey, ga4: !!s.ga4, shareToken: s.shareToken };
 }
 
 export async function listSites(): Promise<Site[]> {
@@ -116,6 +118,29 @@ export async function clearStripeKey(id: string): Promise<void> {
   if (!s) return;
   delete s.stripeKey;
   await save(sites);
+}
+
+// Public share link. The token is the only credential, so it is long and random.
+export async function setShareToken(id: string): Promise<string | undefined> {
+  const sites = await listSites();
+  const s = sites.find((x) => x.id === id);
+  if (!s) return undefined;
+  s.shareToken = randomBytes(16).toString('hex');
+  await save(sites);
+  return s.shareToken;
+}
+
+export async function clearShareToken(id: string): Promise<void> {
+  const sites = await listSites();
+  const s = sites.find((x) => x.id === id);
+  if (!s) return;
+  delete s.shareToken;
+  await save(sites);
+}
+
+export async function getSiteByShareToken(token: string): Promise<Site | undefined> {
+  if (!token || !/^[a-f0-9]{32}$/.test(token)) return undefined;
+  return (await listSites()).find((s) => s.shareToken === token);
 }
 
 export async function setGa4(id: string, cfg: Ga4Config): Promise<void> {

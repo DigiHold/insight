@@ -10,7 +10,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 const GlobeModal = dynamic(() => import('./globe'), { ssr: false });
 
-interface SiteItem { id: string; name: string; createdAt: number; url: string; favicon: boolean; stripe: boolean; ga4: boolean }
+interface SiteItem { id: string; name: string; createdAt: number; url: string; favicon: boolean; stripe: boolean; ga4: boolean; shareToken?: string }
 interface Row { name: string; count: number }
 interface Keyword { query: string; clicks: number; impressions: number; ctr: number; position: number }
 interface Stats {
@@ -201,7 +201,7 @@ interface Tab { label: string; icon?: ReactNode; items: Item[]; donut?: boolean;
 const plainItems = (rows: Row[], color: string, transform?: (s: string) => string): Item[] =>
   rows.map((r) => ({ key: r.name || '—', left: <span className="truncate">{(transform ?? ((s) => s || '/'))(r.name)}</span>, value: r.count, color }));
 
-type Modal = null | { type: 'add' } | { type: 'script'; site: SiteItem } | { type: 'stripe'; site: SiteItem } | { type: 'ga4'; site: SiteItem } | { type: 'url'; site: SiteItem } | { type: 'delete'; site: SiteItem };
+type Modal = null | { type: 'add' } | { type: 'script'; site: SiteItem } | { type: 'share'; site: SiteItem } | { type: 'stripe'; site: SiteItem } | { type: 'ga4'; site: SiteItem } | { type: 'url'; site: SiteItem } | { type: 'delete'; site: SiteItem };
 type Period = 'today' | '7d' | '30d' | '90d' | 'custom';
 
 
@@ -261,9 +261,11 @@ function SortableCard({ id, wide, edit, onHide, children }: { id: CardId; wide: 
 
 const GripIcon = () => <Ico><circle cx="9" cy="6" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="9" cy="18" r="1" /><circle cx="15" cy="6" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="18" r="1" /></Ico>;
 
-export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
-  // Read-only public demo: one fixed site, no mutations, no account chrome.
+export default function Dashboard({ demoSite, shareToken }: { demoSite?: SiteItem; shareToken?: string } = {}) {
+  // Read-only public view: one fixed site, no mutations, no account chrome.
+  // A share link carries its token on every read so the API authorises it.
   const demo = !!demoSite;
+  const shareQS = shareToken ? `&share=${encodeURIComponent(shareToken)}` : '';
   const [sites, setSites] = useState<SiteItem[]>(demoSite ? [demoSite] : []);
   const [siteId, setSiteId] = useState<string>(demoSite ? demoSite.id : '');
   const [data, setData] = useState<Stats | null>(null);
@@ -284,7 +286,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
   const [noteOpen, setNoteOpen] = useState(false);
   const loadNotes = useCallback(() => {
     if (!siteId) { setNotes([]); return; }
-    fetch(`/api/notes?site=${encodeURIComponent(siteId)}`, { cache: 'no-store' })
+    fetch(`/api/notes?site=${encodeURIComponent(siteId)}${shareQS}`, { cache: 'no-store' })
       .then((r) => r.json()).then((j) => setNotes(j.notes ?? [])).catch(() => setNotes([]));
   }, [siteId]);
   useEffect(() => { loadNotes(); }, [loadNotes]);
@@ -342,7 +344,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
   const loadStats = useCallback(async (id: string) => {
     if (!id) { setData(null); return; }
     try {
-      const res = await fetch(`/api/stats?site=${encodeURIComponent(id)}&period=${period}${rangeQS}`, { cache: 'no-store' });
+      const res = await fetch(`/api/stats?site=${encodeURIComponent(id)}&period=${period}${rangeQS}${shareQS}`, { cache: 'no-store' });
       if (res.ok) setData((await res.json()) as Stats);
     } catch { /* ignore */ }
   }, [period, rangeQS]);
@@ -363,7 +365,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
   useEffect(() => {
     if (!siteId) { setKeywords([]); return; }
     let active = true;
-    fetch(`/api/gsc?site=${encodeURIComponent(siteId)}&period=${period}${period === 'custom' ? `&from=${range.from}&to=${range.to}` : ''}`, { cache: 'no-store' })
+    fetch(`/api/gsc?site=${encodeURIComponent(siteId)}&period=${period}${period === 'custom' ? `&from=${range.from}&to=${range.to}` : ''}${shareQS}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { keywords: [], error: null, tried: [] }))
       .then((j) => { if (active) { setKeywords((j.keywords ?? []) as Keyword[]); setKeywordError(j.error ?? null); setKeywordTried((j.tried ?? []) as string[]); } })
       .catch(() => { if (active) { setKeywords([]); setKeywordError(null); setKeywordTried([]); } });
@@ -443,6 +445,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
           <MenuItem icon={<GripIcon />} onClick={() => { setEditCards(true); close(); }}>Customize dashboard</MenuItem>
           <MenuItem icon={<CodeIcon />} onClick={() => { setModal({ type: 'script', site }); close(); }}>Show tracking script</MenuItem>
           <MenuItem icon={<LinkIcon />} onClick={() => { setModal({ type: 'url', site }); close(); }}>Set website URL</MenuItem>
+          <MenuItem icon={<ShareIcon />} onClick={() => { setModal({ type: 'share', site }); close(); }}>{site.shareToken ? 'Public dashboard link' : 'Share dashboard publicly'}</MenuItem>
           {site.stripe
             ? <MenuItem icon={<StripeIcon />} onClick={async () => { await fetch(`/api/sites/stripe?siteId=${site.id}`, { method: 'DELETE' }); loadSites(); close(); }}>Disconnect Stripe</MenuItem>
             : <MenuItem icon={<StripeIcon />} onClick={() => { setModal({ type: 'stripe', site }); close(); }}>Connect Stripe</MenuItem>}
@@ -644,7 +647,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
                   { label: 'Cities', items: plainItems(data?.cities ?? [], '#10b981'), emptyNote: 'Needs GA4, or the Cloudflare "visitor location headers" transform.' },
                   { label: 'Languages', items: plainItems(data?.languages ?? [], '#a855f7', langLabel) },
                 ]} />,
-                feed: <FeedCard siteId={siteId} />,
+                feed: <FeedCard siteId={siteId} shareToken={shareToken} />,
                 heatmap: <HeatmapCard cells={data?.heatmap ?? []} />,
                 funnel: <FunnelCard siteId={siteId} funnel={data?.funnel ?? null} readonly={demo} onSaved={() => loadStats(siteId)} />,
                 retention: <RetentionCard rows={data?.retention ?? []} />,
@@ -701,6 +704,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
 
       {modal?.type === 'add' && <AddSiteModal onClose={() => setModal(null)} onCreated={(s) => { loadSites(); setSiteId(s.id); setModal({ type: 'script', site: s }); }} />}
       {modal?.type === 'script' && <ScriptModal site={modal.site} onClose={() => setModal(null)} />}
+      {modal?.type === 'share' && <ShareModal site={modal.site} onClose={() => setModal(null)} onChanged={loadSites} />}
       {modal?.type === 'stripe' && <StripeModal site={modal.site} onClose={() => setModal(null)} onDone={() => { loadSites(); setModal(null); }} />}
       {modal?.type === 'ga4' && <Ga4Modal site={modal.site} onClose={() => setModal(null)} onDone={() => { loadSites(); setModal(null); }} />}
       {modal?.type === 'url' && <UrlModal site={modal.site} onClose={() => setModal(null)} onDone={() => { loadSites(); setModal(null); }} />}
@@ -727,7 +731,7 @@ export default function Dashboard({ demoSite }: { demoSite?: SiteItem } = {}) {
           onApply={(r) => { setRange(r); setPeriod('custom'); setRangeOpen(false); }}
         />
       )}
-      {globeOpen && <GlobeModal site={siteId} onClose={() => setGlobeOpen(false)} />}
+      {globeOpen && <GlobeModal site={siteId} shareToken={shareToken} onClose={() => setGlobeOpen(false)} />}
     </div>
   );
 }
@@ -920,12 +924,13 @@ function SplitBar({ newV, returning }: { newV: number; returning: number }) {
 }
 
 // Live feed: the latest pageviews, refreshed every 5 seconds.
-function FeedCard({ siteId }: { siteId: string }) {
+function FeedCard({ siteId, shareToken }: { siteId: string; shareToken?: string }) {
+  const shareQS = shareToken ? `&share=${encodeURIComponent(shareToken)}` : '';
   const [feed, setFeed] = useState<{ ts: number; path: string; country: string; source: string; type: string; device: string }[]>([]);
   useEffect(() => {
     if (!siteId) return;
     let active = true;
-    const load = () => fetch(`/api/feed?site=${encodeURIComponent(siteId)}`, { cache: 'no-store' })
+    const load = () => fetch(`/api/feed?site=${encodeURIComponent(siteId)}${shareQS}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => { if (active) setFeed(j.feed ?? []); })
       .catch(() => { /* keep the last list */ });
@@ -1924,6 +1929,65 @@ function ScriptModal({ site, onClose }: { site: SiteItem; onClose: () => void })
       <Snippet id={site.id} />
       <div className="mt-5 flex justify-end"><button onClick={onClose} className="btn-primary">Done</button></div>
     </Overlay>
+  );
+}
+
+function ShareModal({ site, onClose, onChanged }: { site: SiteItem; onClose: () => void; onChanged: () => void }) {
+  const [token, setToken] = useState(site.shareToken ?? '');
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const url = token ? `${typeof window === 'undefined' ? '' : window.location.origin}/share/${token}` : '';
+
+  const enable = async () => {
+    setBusy(true);
+    const res = await fetch('/api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: site.id }) });
+    const j = await res.json().catch(() => ({}));
+    if (j?.token) setToken(String(j.token));
+    setBusy(false);
+    onChanged();
+  };
+  const disable = async () => {
+    setBusy(true);
+    await fetch(`/api/share?id=${encodeURIComponent(site.id)}`, { method: 'DELETE' });
+    setToken('');
+    setBusy(false);
+    onChanged();
+  };
+
+  return (
+    <Overlay onClose={onClose}>
+      <h3 className="head mb-1 text-lg font-bold text-zinc-900 dark:text-zinc-50">Public dashboard &mdash; {site.name}</h3>
+      <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">Anyone with this link sees this site&apos;s dashboard, read only, without signing in. Revenue is never included. Turn it off and the link stops working right away.</p>
+      {token ? (
+        <>
+          <div className="flex items-center gap-2">
+            <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200" />
+            <button
+              onClick={async () => { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+              className="btn-primary shrink-0"
+            >{copied ? 'Copied' : 'Copy'}</button>
+          </div>
+          <div className="mt-5 flex justify-between gap-2">
+            <button disabled={busy} onClick={disable} className="rounded-xl px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950/40">Turn off sharing</button>
+            <button onClick={onClose} className="btn-primary">Done</button>
+          </div>
+        </>
+      ) : (
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">Cancel</button>
+          <button disabled={busy} onClick={enable} className="btn-primary disabled:opacity-50">{busy ? 'Creating...' : 'Create public link'}</button>
+        </div>
+      )}
+    </Overlay>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-4">
+      <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+      <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+    </svg>
   );
 }
 

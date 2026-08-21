@@ -15,5 +15,5 @@ export default async function DemoPage() {
       </main>
     );
   }
-  return <Dashboard demoSite={toPublic(site)} />;
+  return <Dashboard demoSite={{ ...toPublic(site), shareToken: undefined }} />;
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { validSession, demoAllowed } from '@/lib/auth';
+import { validSession, publicRead } from '@/lib/auth';
 import { getSite } from '@/lib/sites';
 import { getGa4Account } from '@/lib/ga4-account';
 import { fetchKeywords } from '@/lib/gsc';
@@ -13,7 +13,8 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const site = url.searchParams.get('site') ?? '';
-  if (!validSession(session) && !demoAllowed(site)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const share = url.searchParams.get('share') ?? '';
+  if (!validSession(session) && !(await publicRead(site, share))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const period = url.searchParams.get('period') ?? '7d';
   const from = url.searchParams.get('from') ?? '';
   const to = url.searchParams.get('to') ?? '';

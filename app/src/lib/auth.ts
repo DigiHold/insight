@@ -77,6 +77,21 @@ export function demoAllowed(site: string | null | undefined): boolean {
   return !!d && !!site && site === d;
 }
 
+// A share link grants read-only access to one site: the caller passes ?share=<token>
+// and it must match the token stored on that exact site.
+export async function shareAllowed(site: string | null | undefined, token: string | null | undefined): Promise<boolean> {
+  if (!site || !token) return false;
+  const { getSiteByShareToken } = await import('@/lib/sites');
+  const s = await getSiteByShareToken(token);
+  return !!s && s.id === site;
+}
+
+// True when the request is public (demo or share link) rather than an owner session.
+// Public views never see revenue.
+export async function publicRead(site: string | null | undefined, token: string | null | undefined): Promise<boolean> {
+  return demoAllowed(site) || (await shareAllowed(site, token));
+}
+
 export function makeSession(days: number): string {
   return sign('session', Date.now() + days * 86400000);
 }

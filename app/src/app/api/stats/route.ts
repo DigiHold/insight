@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { queryRows } from '@/lib/clickhouse';
-import { validSession, validApiToken, bearerFrom, demoAllowed } from '@/lib/auth';
+import { validSession, validApiToken, bearerFrom, publicRead } from '@/lib/auth';
 import { getSite } from '@/lib/sites';
 import { getJson } from '@/lib/settings';
 import { stripeRevenue, stripeRevenueRange, stripeSeries, stripeSeriesRange, type Revenue, type RevenueBucket } from '@/lib/stripe';
@@ -180,9 +180,10 @@ function fromGa4(g: Ga4Stats, base: Base) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const site = url.searchParams.get('site') ?? 'all';
+  const share = url.searchParams.get('share') ?? '';
   const session = (await cookies()).get('insight_session')?.value;
   const authed = validSession(session) || validApiToken(bearerFrom(req));
-  if (!authed && !demoAllowed(site)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!authed && !(await publicRead(site, share))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const period = url.searchParams.get('period') ?? 'today';
   const all = site === 'all' || site === '';
   const dateRe = /^\d{4}-\d{2}-\d{2}$/;
@@ -192,15 +193,15 @@ export async function GET(req: Request) {
 
   try {
     const data = period === 'today'
-      ? await liveStats(site, all)
-      : await historyStats(site, all, custom ? 'custom' : period, custom ? from : undefined, custom ? to : undefined);
+      ? await liveStats(site, all, authed)
+      : await historyStats(site, all, custom ? 'custom' : period, custom ? from : undefined, custom ? to : undefined, authed);
     return NextResponse.json(data);
   } catch {
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });
   }
 }
 
-async function liveStats(site: string, all: boolean) {
+async function liveStats(site: string, all: boolean, owner: boolean) {
   const filter = all ? '' : ' AND site_id = {site:String}';
   const params = all ? undefined : { site };
 
@@ -252,7 +253,7 @@ async function liveStats(site: string, all: boolean) {
   };
 
   let revenue: Revenue | null = null;
-  const s = all ? undefined : await getSite(site);
+  const s = all || !owner ? undefined : await getSite(site);
   if (s?.stripeKey) revenue = await stripeRevenue(s.stripeKey, 1);
   const revMap = s?.stripeKey ? await stripeSeries(s.stripeKey, 1) : null;
 
@@ -355,7 +356,7 @@ function stitchGa4(native: NativeResult, g: Ga4Stats, base: Base, revMap: Record
 // backfills the days before Insight was installed on the site, so a 90-day view can
 // be Insight for the recent weeks plus GA4 for the older ones, while 7/30-day views
 // that sit entirely after install are pure Insight.
-async function historyStats(site: string, all: boolean, period: string, from?: string, to?: string) {
+async function historyStats(site: string, all: boolean, period: string, from?: string, to?: string, owner = true) {
   const custom = period === 'custom' && !!from && !!to;
   const days = custom
     ? Math.min(366, Math.max(1, Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86400000) + 1))
@@ -379,7 +380,7 @@ async function historyStats(site: string, all: boolean, period: string, from?: s
 
   const fromSec = custom ? Math.floor(new Date(`${from}T00:00:00Z`).getTime() / 1000) : 0;
   const toSec = custom ? Math.floor(new Date(`${to}T00:00:00Z`).getTime() / 1000) + 86400 : 0;
-  const s = all ? undefined : await getSite(site);
+  const s = all || !owner ? undefined : await getSite(site);
   const revenue = s?.stripeKey ? (custom ? await stripeRevenueRange(s.stripeKey, fromSec, toSec) : await stripeRevenue(s.stripeKey, days)) : null;
   const revMap = s?.stripeKey ? (custom ? await stripeSeriesRange(s.stripeKey, fromSec, toSec) : await stripeSeries(s.stripeKey, days)) : null;
   const base: Base = { revenue, online, campaigns: [], ai, aiSeries, aiBots };

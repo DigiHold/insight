@@ -124,7 +124,7 @@ function cardHTML(v: Visitor): string {
   </div>`;
 }
 
-export function GlobeModal({ site, onClose }: { site: string; onClose: () => void }) {
+export function GlobeModal({ site, onClose, shareToken }: { site: string; onClose: () => void; shareToken?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, { marker: mapboxgl.Marker; popup: mapboxgl.Popup; el: HTMLElement; sig: string }>>(new Map());
@@ -194,7 +194,7 @@ export function GlobeModal({ site, onClose }: { site: string; onClose: () => voi
     let active = true;
     const load = async () => {
       try {
-        const res = await fetch(`/api/live?site=${encodeURIComponent(site)}`, { cache: 'no-store' });
+        const res = await fetch(`/api/live?site=${encodeURIComponent(site)}${shareToken ? `&share=${encodeURIComponent(shareToken)}` : ''}`, { cache: 'no-store' });
         if (res.ok && active) setData((await res.json()) as LiveData);
       } catch { /* ignore */ }
     };

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { validSession, demoAllowed } from '@/lib/auth';
+import { validSession, publicRead } from '@/lib/auth';
 import { getJson, setJson } from '@/lib/settings';
 
 export const runtime = 'nodejs';
@@ -10,7 +10,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   const session = (await cookies()).get('insight_session')?.value;
   const site = new URL(req.url).searchParams.get('site') ?? '';
-  if (!validSession(session) && !demoAllowed(site)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const share = new URL(req.url).searchParams.get('share') ?? '';
+  if (!validSession(session) && !(await publicRead(site, share))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const steps = (await getJson<string[]>(`funnel-${site}`)) ?? [];
   return NextResponse.json({ steps });
 }

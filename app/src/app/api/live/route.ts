@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { queryRows } from '@/lib/clickhouse';
-import { validSession, demoAllowed } from '@/lib/auth';
+import { validSession, publicRead } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,7 +30,8 @@ function streakStart(list: number[]): number {
 export async function GET(req: Request) {
   const session = (await cookies()).get('insight_session')?.value;
   const site = new URL(req.url).searchParams.get('site') ?? '';
-  if (!validSession(session) && !demoAllowed(site)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const share = new URL(req.url).searchParams.get('share') ?? '';
+  if (!validSession(session) && !(await publicRead(site, share))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const all = !site || site === 'all';
   const filter = all ? '' : ' AND site_id = {site:String}';
   const params = all ? undefined : { site };
