@@ -260,6 +260,21 @@ node cli/insight.mjs stats --from 2026-06-01 --to 2026-06-30 --json
 
 Full reference in [cli/README.md](../cli/README.md).
 
+## 13. Disk usage
+
+Your own analytics take very little room, 3.3 MB on the production install. ClickHouse itself is what grows, because its stock image logs its own activity at trace level into `system` tables that never expire. On that same server those tables reached 27.7 GB.
+
+`clickhouse/config.d/logs.xml` stops that growth by lowering the server log level to `warning` and turning off the diagnostic tables Insight never reads. `query_log` stays, for 7 days, so you can still debug a slow query. New installs get this from the start.
+
+If you installed Insight before this file existed, pull the update and recreate the ClickHouse container (the automatic deploy workflow below does this for you), then reclaim the space once:
+
+```bash
+cd /opt/insight && git pull && docker compose up -d clickhouse
+./scripts/clickhouse-trim-logs.sh
+```
+
+The script only drops `system` log tables and never touches the `insight` database. It refuses to run until the new config is live, because ClickHouse would otherwise recreate whatever it removed.
+
 ## Auto-deploy (optional)
 
 The repo ships a GitHub Actions workflow that builds the image, pushes it to the registry, and deploys over SSH on every push to `main`. Set these repository secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `MAPBOX_TOKEN`. Add the server's public key as a read-only deploy key so the box can pull the repo.

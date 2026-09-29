@@ -1,0 +1,26 @@
+<!--
+  Insight keeps its analytics in the `insight` database, a few megabytes. The stock ClickHouse image
+  also writes its own diagnostics at trace level into `system.*` tables that never expire, and on the
+  production VPS those tables reached 27.7 GB between July and September 2026 while the analytics
+  stayed at 3.3 MB. This file keeps only what helps debugging, for a bounded time.
+
+  After deploying it on an existing install, reclaim the old space once:
+  scripts/clickhouse-trim-logs.sh
+-->
+<clickhouse>
+    <logger>
+        <level>warning</level>
+    </logger>
+
+    <text_log remove="remove"/>
+    <trace_log remove="remove"/>
+    <processors_profile_log remove="remove"/>
+    <metric_log remove="remove"/>
+    <asynchronous_metric_log remove="remove"/>
+    <query_metric_log remove="remove"/>
+    <part_log remove="remove"/>
+
+    <query_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </query_log>
+</clickhouse>
