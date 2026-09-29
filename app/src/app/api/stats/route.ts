@@ -95,9 +95,11 @@ async function extraData(site: string, all: boolean, filter: string, params: Rec
     safe(queryRows<CohortRow>(`SELECT toString(coh) AS cohort, dateDiff('week', coh, wk) AS offset, uniqExact(vid) AS n FROM (SELECT e.visitor_id AS vid, e.wk AS wk, f.cohort AS coh FROM (SELECT visitor_id, toStartOfWeek(ts, 1) AS wk FROM events WHERE event_type = 'pageview' AND ts >= now() - INTERVAL 63 DAY${filter} GROUP BY visitor_id, wk) AS e INNER JOIN (SELECT visitor_id, min(toStartOfWeek(ts, 1)) AS cohort FROM events WHERE event_type = 'pageview'${filter} GROUP BY visitor_id HAVING min(toStartOfWeek(ts, 1)) >= toStartOfWeek(now() - INTERVAL 63 DAY, 1)) AS f ON e.visitor_id = f.visitor_id WHERE e.wk >= f.cohort) GROUP BY coh, offset ORDER BY coh, offset`, params)),
     safe(queryRows<RevRow>(`SELECT source AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} GROUP BY key ORDER BY amount DESC LIMIT 30`, params)),
     safe(queryRows<RevRow>(`SELECT campaign AS key, sum(amount) AS amount FROM revenue WHERE ${win}${filter} AND campaign != '' GROUP BY key ORDER BY amount DESC LIMIT 30`, params)),
+    // windowFunnel only takes DateTime, Date or an unsigned number, never the DateTime64(3) `ts`
+    // column, so it is cast here. Until v1.0.2 every funnel query failed and safe() showed it empty.
     funnelSteps.length >= 2
       ? safe(queryRows<{ level: string; c: string }>(
-          `SELECT level, count() AS c FROM (SELECT visitor_id, windowFunnel(${funnelWindowSec})(ts, ${funnelSteps.map((_, i) => `if(pathname = '/', '/', replaceRegexpOne(pathname, '/+$', '')) = {f${i}:String}`).join(', ')}) AS level FROM events WHERE ${pv} GROUP BY visitor_id) WHERE level > 0 GROUP BY level`,
+          `SELECT level, count() AS c FROM (SELECT visitor_id, windowFunnel(${funnelWindowSec})(toDateTime(ts), ${funnelSteps.map((_, i) => `if(pathname = '/', '/', replaceRegexpOne(pathname, '/+$', '')) = {f${i}:String}`).join(', ')}) AS level FROM events WHERE ${pv} GROUP BY visitor_id) WHERE level > 0 GROUP BY level`,
           { ...(params ?? {}), ...Object.fromEntries(funnelSteps.map((p, i) => [`f${i}`, normPath(p)])) },
         ))
       : Promise.resolve([] as { level: string; c: string }[]),
